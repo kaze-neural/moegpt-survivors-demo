@@ -45,6 +45,12 @@ const ultimateCooldown = 45;
 const ultimateEchoes = 4;
 const ultimateEchoInterval = .5;
 const ultimateEchoDamage = .65;
+const criticalMultiplier = 1.4;
+const maxDamageLabels = 36;
+const shatterRadius = rank => 54 + rank * 12;
+const shatterDamage = rank => .55 + rank * .2;
+const circuitDistance = rank => 150 - rank * 20;
+const focusChance = rank => 8 + rank * 3;
 const healthTier = waveIndex => 2 ** Math.floor(waveIndex / 5);
 const characters = {
   chatgpt: { id: 'chatgpt', color: '#d4b8ff', titleColor: '#5c4479', name: 'ChatGPT', title: '银龙少女', portrait: 'silver-dragon', walk: 'dragon-walk',
@@ -111,8 +117,13 @@ const weaponStats = {
     paths: rank > maxWeaponRank ? [[96, 5, 1], [144, 5, -1]] : [[78 + (rank - 1) * 6, rank + 1, 1]] }),
 };
 const upgrades = [
-  { name: '碎星增幅', icon: 'amplifier', description: '主武器伤害 +55%', price: 12, apply: p => { p.power *= 1.55; } },
-  { name: '短咏回路', icon: 'circuit', description: '主武器间隔缩短 25%，最低 0.12 秒', price: 12, apply: p => { p.interval = Math.max(.12, p.interval * .75); } },
+  { name: '碎星增幅', icon: 'amplifier', price: 12, apply: p => { p.power *= 1.55; },
+    effect: rank => t('每级主武器伤害 +55%。每第 4 次攻击的首个命中会炸裂，半径 {0}，追加该攻击 {1}% 的伤害。', shatterRadius(rank), Math.round(shatterDamage(rank) * 100)) },
+  { name: '短咏回路', icon: 'circuit', price: 12, apply: p => { p.interval = Math.max(.12, p.interval * .75); },
+    effect: rank => t('每级主武器间隔缩短 25%，最低 0.12 秒。移动 {0} 充能，下一次攻击首个命中放出电弧。', circuitDistance(rank)) +
+      ' ' + t('电弧对附近另一目标造成 80% 伤害。只有一个目标时，追加 55% 伤害。') },
+  { name: '精准棱芯', icon: 'prism', price: 14,
+    effect: rank => t('武器直接命中暴击率提升至 {0}%，暴击伤害为 {1} 倍。', focusChance(rank), criticalMultiplier) },
   { name: '轻羽鳞片', icon: 'boots', description: '移动速度 +20%，最高 390', price: 10, apply: p => { p.speed = Math.min(390, p.speed * 1.20); } },
   { name: '共鸣磁芯', icon: 'magnet', description: '芯片拾取范围 +48', price: 10, apply: p => { p.magnet += 48; } },
   { name: '银鳞修复', icon: 'scale', description: '生命上限 +22，恢复 42 点生命', price: 10, apply: p => {
@@ -152,7 +163,7 @@ let width = 750;
 let height = 650;
 let scale = 1;
 let inset = 0;
-let player, enemies, shots, hostileShots, drops, rings, particles, skillVfx, wave, remaining, spawnTimer;
+let player, enemies, shots, hostileShots, drops, rings, particles, skillVfx, hitVfx, damageLabels, wave, remaining, spawnTimer;
 let chips, kills, offers, boss, banner, previous = 0, gameSpeed = 1;
 let rerolls = 0;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -225,7 +236,8 @@ function resize() {
   canvas.width = Math.round(rect.width * ratio);
   canvas.height = Math.round(rect.height * ratio);
   if (!player) return;
-  const entities = [player, ...enemies, ...drops, ...shots, ...hostileShots, ...rings, ...particles, ...skillVfx];
+  const entities = [player, ...enemies, ...drops, ...shots, ...hostileShots, ...rings,
+    ...particles, ...skillVfx, ...damageLabels, ...hitVfx.flatMap(effect => effect.to ? [effect, effect.to] : [effect])];
   if (player.skillCast?.center) entities.push(player.skillCast.center);
   for (const entity of entities) {
     entity.x *= width / oldWidth;
@@ -244,7 +256,7 @@ function startRun() {
     speed: character.speed, power: character.power, interval: character.interval, defense: character.defense,
     level: 1, xp: 0, weaponBonus: 1, magnet: 61, attack: .15, shotCount: 0, invulnerable: 0, stride: 0,
     ranks: {}, moduleRanks: {}, cooldowns: {}, orbitAngle: 0, orbitHits: new WeakMap(), weaponTime: 0,
-    links: [], pulse: 0, moving: false, flip: false, split: false, mirrorSwing: null,
+    links: [], pulse: 0, circuitTravel: 0, moving: false, flip: false, split: false, mirrorSwing: null,
     ward: 0, wardCharge: 0, signatureEquipped: false, skillCooldown: 0, skillCast: null, damage: {},
     pose: 0, cast: 0, castAngle: 0, skillPose: 0, skillFacing: 1, hurtFlash: 0, recovery: 0, trail: 0,
   };
@@ -255,6 +267,8 @@ function startRun() {
   rings = [];
   particles = [];
   skillVfx = [];
+  hitVfx = [];
+  damageLabels = [];
   boss = null;
   chips = 0;
   kills = 0;
@@ -471,6 +485,7 @@ function pauseDetails() {
     ['生命', Math.ceil(player.hp) + ' / ' + player.maxHp],
     ['防御', player.defense + ' · ' + t('减伤 {0}%', statNumber(damageReduction() * 100))],
     ['全武器伤害加成', '+' + Math.round((attackMultiplier() - 1) * 100) + '%'],
+    ['武器暴击', focusChance(player.moduleRanks['精准棱芯'] ?? 0) + '% · ×' + criticalMultiplier],
     ['移速', t('{0} 单位/秒', statNumber(player.speed))],
     ['拾取范围', t('{0} 单位', statNumber(player.magnet))],
     ['芯片', chips],
@@ -588,7 +603,7 @@ function buildOffer(item) {
       if (item === player.character.signature) {
         player.signatureEquipped = true;
         if (player.character === characters.chatgpt) { player.ward = wardCapacity(); player.wardCharge = 0; }
-      } else item.apply(player);
+      } else item.apply?.(player);
     }
     syncHud();
     drawShop();
@@ -825,6 +840,8 @@ function movePlayer(dt) {
   const moved = Math.hypot(player.x - oldX, player.y - oldY);
   player.moving = moved > .02;
   player.stride = player.moving ? player.stride + moved : 0;
+  const circuit = player.moduleRanks['短咏回路'];
+  if (circuit) player.circuitTravel = Math.min(circuitDistance(circuit), player.circuitTravel + moved);
   if (Math.abs(dx) > .12) player.flip = dx < 0;
 }
 
@@ -846,11 +863,17 @@ function attack() {
   player.cast = .22;
   player.castAngle = angle;
   player.shotCount++;
+  const shatter = player.shotCount % 4 === 0 ? (player.moduleRanks['碎星增幅'] ?? 0) : 0;
+  const circuitRank = player.moduleRanks['短咏回路'] ?? 0;
+  const circuit = circuitRank > 0 && player.circuitTravel >= circuitDistance(circuitRank);
+  if (circuit) player.circuitTravel = 0;
+  // Split, piercing and returning projectiles share one proc per attack.
+  const modules = shatter || circuit ? { shatter, circuit } : null;
   if (id === 'grok') {
     const damage = mainDamage();
     const rune = signatureRank() ? damage * (.25 + .15 * signatureRank()) : 0;
-    swingAxe(player, angle, damage, rune, false);
-    if (player.split) player.mirrorSwing = { target, angle, damage, rune, delay: Math.min(.16, player.interval * .48) };
+    swingAxe(player, angle, damage, rune, false, modules);
+    if (player.split) player.mirrorSwing = { target, angle, damage, rune, modules, delay: Math.min(.16, player.interval * .48) };
     player.attack = player.interval;
     return;
   }
@@ -866,7 +889,7 @@ function attack() {
         shots.push({ x: player.x - Math.sin(heading) * side, y: player.y + Math.cos(heading) * side,
           angle: heading, vx: Math.cos(heading) * speed, vy: Math.sin(heading) * speed, r: 7,
           life: 1.6, hits: new Set(), damage: mainDamage(), source: 'main', icon: player.character.icon,
-          trait: id, echo: signatureRank() && player.shotCount % 3 === 0 });
+          trait: id, echo: signatureRank() && player.shotCount % 3 === 0, modules, mirror: offset > 0 });
       }
     }
     player.attack = player.interval;
@@ -879,18 +902,19 @@ function attack() {
     shots.push({ x: player.x, y: player.y, vx: Math.cos(heading) * speed, vy: Math.sin(heading) * speed,
       angle: heading, r: usesBook ? 8 : charged ? 11 : 4,
       life: usesBook ? 3.2 : 1.42, hits: new Set(), damage: mainDamage(charged ? 1.65 : 1),
-      charged, pierces: usesBook, icon: usesBook ? 'page-bolt' : 'dragon-bolt',
+      charged, pierces: usesBook, icon: usesBook ? 'page-bolt' : 'dragon-bolt', source: 'main', modules, mirror: offset > 0,
       pageTime: usesBook ? pageOutTime : undefined });
   }
   player.attack = player.interval;
 }
 
-function swingAxe(origin, angle, damage, rune, mirror) {
+function swingAxe(origin, angle, damage, rune, mirror, modules) {
   addEffect('grok', origin, 126, mirror ? .34 : .28, angle, mirror ? 1 : 0, mirror ? 'mirror' : 'main');
   for (const enemy of enemies) {
     if (!inArc(origin, enemy, 126, angle, 1.16)) continue;
-    if (!applyDamage(enemy, damage, 'main')) continue;
+    if (!weaponHit(enemy, damage, 'main')) continue;
     if (rune && applyDamage(enemy, rune, 'signature')) spark(enemy.x, enemy.y, '#ffcf65', 4);
+    triggerPrimaryModules(modules, enemy, damage);
   }
 }
 
@@ -912,7 +936,7 @@ function stepMirrorSwing(dt) {
     }
   }
   const aim = target ? Math.atan2(target.y - origin.y, target.x - origin.x) : angle;
-  swingAxe(origin, aim, swing.damage, swing.rune, true);
+  swingAxe(origin, aim, swing.damage, swing.rune, true, swing.modules);
 }
 
 function mainDamage(multiplier = 1) {
@@ -948,12 +972,45 @@ function onMainImpact(shot, enemy) {
   }
 }
 
-function damageEnemy(enemy, damage, source = 'main', returningPage = false) {
-  if (!applyDamage(enemy, damage, source)) return;
-  if (!player.signatureEquipped || player.character !== characters.claude) return;
+function triggerPrimaryModules(modules, enemy, damage) {
+  if (!modules || modules.spent) return;
+  modules.spent = true;
+  const { x, y } = enemy;
+  if (modules.shatter) {
+    const radius = shatterRadius(modules.shatter);
+    const bonus = damage * shatterDamage(modules.shatter);
+    addHitEffect({ kind: 'shatter', x, y, radius, life: .38 });
+    for (const near of enemies) {
+      if (distance(enemy, near) <= radius + near.r) applyDamage(near, bonus, 'main');
+    }
+  }
+  if (modules.circuit) {
+    let target = enemy, closest = 165;
+    for (const near of enemies) {
+      if (near === enemy || near.hp <= 0 || near.grace > 0 || near.transition > 0) continue;
+      const gap = distance(enemy, near);
+      if (gap < closest) { closest = gap; target = near; }
+    }
+    applyDamage(target, damage * (target === enemy ? .55 : .8), 'main');
+    addHitEffect({ kind: 'circuit', x, y, to: { x: target.x, y: target.y }, life: .29 });
+  }
+}
+
+function rollCritical() {
+  return Math.random() * 100 < focusChance(player.moduleRanks['精准棱芯'] ?? 0);
+}
+
+function weaponHit(enemy, damage, source, returningPage = false) {
+  const critical = rollCritical();
+  return damageEnemy(enemy, damage, source, returningPage, critical);
+}
+
+function damageEnemy(enemy, damage, source = 'main', returningPage = false, critical = false) {
+  if (!applyDamage(enemy, critical ? damage * criticalMultiplier : damage, source, critical)) return false;
+  if (!player.signatureEquipped || player.character !== characters.claude) return true;
   if (returningPage) {
     if (enemy.hp > 0) enemy.inkMark = 5;
-    return;
+    return true;
   }
   const inkBurst = enemy.inkMark > 0;
   if (inkBurst) {
@@ -968,9 +1025,10 @@ function damageEnemy(enemy, damage, source = 'main', returningPage = false) {
       }
     }
   }
+  return true;
 }
 
-function applyDamage(enemy, damage, source) {
+function applyDamage(enemy, damage, source, critical = false) {
   if (enemy.hp <= 0 || enemy.grace > 0 || enemy.transition > 0) return false;
   const before = enemy.hp;
   if (enemy.profile) {
@@ -979,9 +1037,37 @@ function applyDamage(enemy, damage, source) {
     enemy.hp = Math.max(lower, enemy.hp - damage * armor);
     if (lower > 0 && enemy.hp <= lower) startBossPhase(enemy, enemy.phaseIndex + 1);
   } else enemy.hp = Math.max(0, enemy.hp - damage);
+  const dealt = before - enemy.hp;
+  if (dealt <= 0) return false;
   enemy.flash = .13;
-  player.damage[source] = (player.damage[source] ?? 0) + before - enemy.hp;
-  return enemy.hp < before;
+  player.damage[source] = (player.damage[source] ?? 0) + dealt;
+  addDamageLabel(enemy, dealt, critical);
+  return true;
+}
+
+function addHitEffect(effect) {
+  if (hitVfx.length >= 24) hitVfx.shift();
+  hitVfx.push({ ...effect, duration: effect.life });
+}
+
+function addDamageLabel(enemy, damage, critical) {
+  const { x, y } = enemy;
+  const recent = damageLabels.find(label => label.mergeTime > 0 && label.critical === critical &&
+    (label.enemy === enemy || (Math.abs(label.x - x) < 16 && Math.abs(label.y - y) < 17)));
+  if (recent) {
+    recent.total += damage;
+    recent.text = String(Math.max(1, Math.round(recent.total)));
+    return;
+  }
+  if (damageLabels.length >= maxDamageLabels) {
+    const normal = damageLabels.findIndex(label => !label.critical);
+    if (normal < 0 && !critical) return;
+    damageLabels.splice(Math.max(0, normal), 1);
+  }
+  damageLabels.push({
+    enemy, x, y, critical, total: damage, text: String(Math.max(1, Math.round(damage))),
+    mergeTime: .13, age: 0, duration: critical ? .8 : .58,
+  });
 }
 
 function nearestForSkill(limit, exclude) {
@@ -1098,7 +1184,7 @@ const weaponAttacks = {
     const inRange = targets.filter(enemy => distance(player, enemy) <= stats.radius + enemy.r);
     if (!inRange.length) return 0;
     player.pulse = .32;
-    for (const enemy of inRange) damageEnemy(enemy, stats.damage, stats.source);
+    for (const enemy of inRange) weaponHit(enemy, stats.damage, stats.source);
     return stats.interval;
   },
   fan(stats, targets) {
@@ -1123,7 +1209,7 @@ const weaponAttacks = {
       }
       if (!nearest) break;
       player.links.push({ from, to: nearest, life: .17 });
-      damageEnemy(nearest, stats.damage, stats.source);
+      weaponHit(nearest, stats.damage, stats.source);
       chain.add(nearest);
       from = nearest;
     }
@@ -1164,7 +1250,7 @@ function fireWeapons(dt) {
   for (const enemy of targets) {
     if (enemy.hp <= 0 || (player.orbitHits.get(enemy) ?? 0) > player.weaponTime) continue;
     if (blades.some(blade => distance(blade, enemy) <= enemy.r + orbit.bladeRadius)) {
-      damageEnemy(enemy, orbit.damage * attackMultiplier(), 'orbit');
+      weaponHit(enemy, orbit.damage * attackMultiplier(), 'orbit');
       player.orbitHits.set(enemy, player.weaponTime + orbit.hitInterval);
     }
   }
@@ -1344,10 +1430,11 @@ function stepShots(dt) {
     for (const enemy of enemies) {
       if (enemy.hp <= 0 || enemy.grace > 0 || shot.hits.has(enemy) || distance(shot, enemy) > shot.r + enemy.r) continue;
       shot.hits.add(enemy);
-      const before = enemy.hp;
-      damageEnemy(enemy, shot.damage, shot.source, Boolean(shot.returning));
-      if (shot.trait && enemy.hp < before) onMainImpact(shot, enemy);
-      spark(enemy.x, enemy.y, '#c9a4ff', 3);
+      if (weaponHit(enemy, shot.damage, shot.source, Boolean(shot.returning))) {
+        if (shot.trait) onMainImpact(shot, enemy);
+        triggerPrimaryModules(shot.modules, enemy, shot.damage);
+        spark(enemy.x, enemy.y, '#c9a4ff', 3);
+      }
       if (!shot.charged && !shot.pierces) { shot.life = 0; break; }
     }
   }
@@ -1410,6 +1497,12 @@ function animatePlayer(dt) {
 }
 
 function step(dt) {
+  hitVfx = hitVfx.filter(effect => (effect.life -= dt) > 0);
+  damageLabels = damageLabels.filter(label => {
+    label.age += dt;
+    label.mergeTime -= dt;
+    return label.age < label.duration;
+  });
   if (remaining !== null) remaining -= dt;
   if (banner > 0) {
     banner -= dt;
@@ -1580,6 +1673,15 @@ function drawPlayer() {
   ctx.scale(1, .48);
   circle(0, 3, player.ward > 0 ? 26 : 23, isClaude ? '#d6a55c35' : '#b99aff37',
     player.ward > 0 ? '#e2bcffc4' : isClaude ? '#ffbc8099' : '#c49affac');
+  const circuit = player.moduleRanks['短咏回路'];
+  if (circuit && player.circuitTravel > 0) {
+    const charge = player.circuitTravel / circuitDistance(circuit);
+    ctx.beginPath();
+    ctx.arc(0, 3, 28, -Math.PI / 2, -Math.PI / 2 + charge * Math.PI * 2);
+    ctx.strokeStyle = charge >= 1 ? '#ddfff9' : '#65eacb';
+    ctx.lineWidth = charge >= 1 ? 4 : 2.5;
+    ctx.stroke();
+  }
   ctx.restore();
   if (player.ward > 0) circle(x, y - 10, 30, '#bd8cff14', '#dec5ff66');
   if (player.recovery > 0) circle(x, y, 22 + (.48 - player.recovery) * 54, null, '#8dffd4a0');
@@ -1702,6 +1804,76 @@ function drawSkillCutIn() {
   ctx.restore();
 }
 
+function drawWeaponHitEffects() {
+  const animated = !reducedMotion.matches;
+  ctx.save();
+  for (const effect of hitVfx) {
+    const progress = 1 - effect.life / effect.duration;
+    const { x, y } = effect;
+    ctx.globalAlpha = 1 - progress;
+    if (effect.kind === 'shatter') {
+      const radius = effect.radius * (animated ? .25 + progress * .75 : .8);
+      ctx.lineWidth = 2.5;
+      circle(x, y, radius, '#cc97ff2b', '#dfa6ff');
+      for (let i = 0; i < 7; i++) {
+        const angle = i * Math.PI * 2 / 7 + (animated ? progress * .42 : 0);
+        const px = x + Math.cos(angle) * radius, py = y + Math.sin(angle) * radius;
+        diamond(px, py, 3, 7, '#bf75ff', '#fff1ff');
+      }
+    } else {
+      const { to } = effect;
+      const reach = distance(effect, to);
+      if (reach > 1) {
+        const dx = to.x - x, dy = to.y - y;
+        const kink = animated ? (1 - progress) * 12 : 7;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + dx * .33 - dy / reach * kink, y + dy * .33 + dx / reach * kink);
+        ctx.lineTo(x + dx * .63 + dy / reach * kink, y + dy * .63 - dx / reach * kink);
+        ctx.lineTo(to.x, to.y);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#38ead2';
+        ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#e9fffb';
+        ctx.stroke();
+      }
+      ctx.lineWidth = 2;
+      circle(to.x, to.y, 9 + (animated ? progress * 19 : 7), '#7bffe13d', '#9effef');
+      diamond(to.x, to.y, 6, 9, '#b5fff1', '#efffff');
+    }
+  }
+  ctx.restore();
+}
+
+function drawDamageLabels() {
+  const animated = !reducedMotion.matches;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  for (const label of damageLabels) {
+    const progress = label.age / label.duration;
+    const x = clamp(label.x + (label.critical ? 9 : -5), 34, width - 34);
+    const y = Math.max(92, label.y - (label.critical ? 44 : 25) - (animated ? progress * 28 : 0));
+    const pop = animated ? 1 + Math.max(0, 1 - label.age / .14) * (label.critical ? .34 : .12) : 1;
+    ctx.globalAlpha = Math.min(1, (1 - progress) * 3.5);
+    ctx.font = '900 ' + Math.round((label.critical ? 24 : 17) * pop) + 'px system-ui';
+    ctx.fillStyle = label.critical ? '#ffdf7f' : '#f8efff';
+    ctx.strokeStyle = '#22142d';
+    ctx.lineWidth = label.critical ? 5 : 3.5;
+    ctx.strokeText(label.text, x, y);
+    ctx.fillText(label.text, x, y);
+    if (label.critical) {
+      const edge = Math.min(50, ctx.measureText(label.text).width / 2 + 7);
+      const flare = animated ? 1 - progress * .75 : .72;
+      diamond(x + edge, y - 7, 3.7 * flare, 9 * flare, '#fff0ab', '#6a4724');
+      diamond(x - edge, y + 6, 2.7 * flare, 6 * flare, '#ffb969');
+    }
+  }
+  ctx.restore();
+}
+
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1753,6 +1925,15 @@ function render() {
   }
   drawPlayer();
   for (const shot of shots) {
+    if (shot.mirror || (shot.modules && !shot.modules.spent)) {
+      ctx.save();
+      ctx.translate(shot.x, shot.y);
+      ctx.rotate(shot.angle);
+      const tint = shot.modules?.circuit && !shot.modules.spent ? '#56f9dfc0' :
+        shot.mirror ? '#a7eaff99' : '#d099ffcc';
+      diamond(-9, 0, shot.mirror ? 14 : 20, 4, tint);
+      ctx.restore();
+    }
     if (shot.trait === 'deepseek') {
       ctx.lineWidth = 1.5;
       circle(shot.x, shot.y, 7.5, '#4cbadfe6', '#d4faff');
@@ -1792,6 +1973,8 @@ function render() {
     ctx.fillRect(particle.x, particle.y, 3, 3);
   }
   ctx.globalAlpha = 1;
+  drawWeaponHitEffects();
+  drawDamageLabels();
   drawSkillCutIn();
   ctx.restore();
 }
