@@ -42,6 +42,9 @@ const maxWeaponRank = 4;
 const evolutionPrice = 58;
 const showTestTools = true;
 const ultimateCooldown = 45;
+const ultimateEchoes = 4;
+const ultimateEchoInterval = .5;
+const ultimateEchoDamage = .65;
 const healthTier = waveIndex => 2 ** Math.floor(waveIndex / 5);
 const characters = {
   chatgpt: { id: 'chatgpt', color: '#d4b8ff', titleColor: '#5c4479', name: 'ChatGPT', title: '银龙少女', portrait: 'silver-dragon', walk: 'dragon-walk',
@@ -181,7 +184,9 @@ function selectCharacter(id) {
 }
 
 function skillDescription(skill) {
-  return t(skill.description) + ' ' + t('冷却 {0} 秒', ultimateCooldown);
+  const echoDuration = ultimateEchoes * ultimateEchoInterval;
+  return t(skill.description) + ' ' + t('随后 {0} 秒内追加 {1} 次余波。', echoDuration, ultimateEchoes) +
+    ' ' + t('冷却 {0} 秒', ultimateCooldown);
 }
 
 function setGameLanguage(language) {
@@ -1020,31 +1025,44 @@ function stepSkill(dt) {
   cast.next -= dt;
   if (cast.next > 0) return;
   const { id, skill, color } = player.character;
+  const baseHits = skill.hits.length;
+  const echo = cast.pulse >= baseHits;
+  const lastBaseHit = baseHits - 1;
   let center = player;
   if (id === 'claude') center = cast.center;
   if (id === 'deepseek') {
-    const offset = 54 + 56 * cast.pulse;
+    if (cast.pulse === baseHits) {
+      cast.center = { x: player.x, y: player.y };
+      const target = nearestForSkill(Infinity);
+      if (target) cast.angle = Math.atan2(target.y - player.y, target.x - player.x);
+    }
+    const tideIndex = echo ? cast.pulse - baseHits : cast.pulse;
+    const offset = 54 + 56 * tideIndex;
     center = { x: cast.center.x + Math.cos(cast.angle) * offset, y: cast.center.y + Math.sin(cast.angle) * offset };
   }
   if (id === 'gemini') {
-    const target = nearestForSkill(400, cast.used) ?? nearestForSkill(400);
+    let target = nearestForSkill(400, cast.used);
+    if (!target) {
+      cast.used.clear();
+      target = nearestForSkill(400);
+    }
     if (target) { center = target; cast.used.add(target); }
   }
   if (id === 'grok') {
     const target = nearestForSkill(240);
     if (target) cast.angle = Math.atan2(target.y - player.y, target.x - player.x);
   }
-  const radius = skill.radius ?? skill.reaches[cast.pulse];
+  const radius = skill.radius ?? skill.reaches[Math.min(cast.pulse, lastBaseHit)];
   addEffect(id, center, radius, .54, cast.angle, cast.pulse);
-  const damage = skill.hits[cast.pulse] * attackMultiplier();
+  const damage = (echo ? skill.hits[lastBaseHit] * ultimateEchoDamage : skill.hits[cast.pulse]) * attackMultiplier();
   for (const enemy of enemies) {
     const inside = id === 'grok' && cast.pulse < 2 ? inArc(center, enemy, radius, cast.angle, 1.38) : distance(center, enemy) <= radius + enemy.r;
     if (inside) damageEnemy(enemy, damage, 'skill');
   }
   spark(center.x, center.y, color, 11);
   cast.pulse++;
-  cast.next += skill.interval;
-  if (cast.pulse >= skill.hits.length) player.skillCast = null;
+  if (cast.pulse === baseHits + ultimateEchoes) player.skillCast = null;
+  else cast.next += cast.pulse >= baseHits ? ultimateEchoInterval : skill.interval;
 }
 
 function gainExperience(enemy) {
@@ -1657,7 +1675,7 @@ function drawSkillEffects() {
       ctx.rotate(aim + (pulse % 2 ? 1 : -1) * (.6 - motion * 1.1));
       if (pulse % 2) ctx.scale(1, -1);
       sprite(image, radius * .52, 0, radius * 1.43);
-      if (pulse === 2) sprite(image, -radius * .52, 0, radius * 1.43, Math.PI);
+      if (pulse >= 2) sprite(image, -radius * .52, 0, radius * 1.43, Math.PI);
     }
     ctx.restore();
   }
