@@ -2,8 +2,7 @@
 
 const gameLanguages = ['en', 'zh-CN', 'ja'];
 const gameMessages = {
-  '星光客厅': ['Starlit Lounge', '星灯のラウンジ'],
-  '星光客厅防卫战': ['Starlit Lounge Defense', '星灯のラウンジ防衛戦'],
+  '星火回路': ['Starfire Circuit', '星火回路'],
   '语言': ['Language', '言語'],
   '选择出战角色': ['Choose a character', 'キャラクターを選択'],
   '选择关卡': ['Choose a stage', 'ステージを選択'],

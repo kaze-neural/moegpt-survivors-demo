@@ -217,7 +217,7 @@ function skillDescription(skill) {
 function setGameLanguage(language) {
   gameLanguage = language;
   document.documentElement.lang = language;
-  document.title = t('星光客厅防卫战') + ' · MoeGPT';
+  document.title = t('星火回路') + ' · MoeGPT';
   el('language-select').value = language;
   for (const label of document.querySelectorAll('[data-text]')) label.textContent = t(label.dataset.text);
   for (const label of document.querySelectorAll('[data-label]')) label.setAttribute('aria-label', t(label.dataset.label));
