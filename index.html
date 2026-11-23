@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#100d20">
   <title>Starlit Lounge Defense · MoeGPT</title>
-  <link rel="stylesheet" href="style.css">
-  <script defer src="i18n.js"></script>
-  <script defer src="game.js"></script>
+  <link rel="stylesheet" href="style.css?v=shop-pickups">
+  <script defer src="i18n.js?v=shop-pickups"></script>
+  <script defer src="game.js?v=shop-pickups"></script>
 </head>
 <body>
   <main id="app">
@@ -62,7 +62,7 @@
           <div id="hud-level" class="hud-level">Lv.1 · 0/14 XP</div>
         </div>
         <div class="wave"><span id="wave-label">Wave 1 / 10</span><strong id="time">00:22</strong></div>
-        <div class="utility"><span id="chips" class="chips">◇ 0</span><button id="pause" class="icon-button" data-label="暂停" aria-label="Pause">Ⅱ</button></div>
+        <div class="utility"><span id="chips" class="chips" aria-label="0 chips"><img src="art/microchip.webp" alt=""><span id="chip-count">0</span></span><button id="pause" class="icon-button" data-label="暂停" aria-label="Pause">Ⅱ</button></div>
       </header>
       <div id="boss-hud" class="boss-hud" hidden>
         <div class="boss-status"><strong id="boss-name"></strong><span id="boss-phase-value"></span></div>

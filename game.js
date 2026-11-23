@@ -45,12 +45,23 @@ const ultimateCooldown = 45;
 const ultimateEchoes = 4;
 const ultimateEchoInterval = .5;
 const ultimateEchoDamage = .65;
-const criticalMultiplier = 1.4;
+const batteryHeal = .20;
+const bossBatteryHeal = .50;
+const eliteChipLoot = 3;
+const bossChipLoot = 10;
+const precisionName = '精准棱芯';
+const precisionTiers = [
+  { chance: 8, multiplier: 2 },
+  { chance: 18, multiplier: 2 },
+  { chance: 18, multiplier: 2.2 },
+  { chance: 28, multiplier: 2.2 },
+  { chance: 28, multiplier: 2.5 },
+  { chance: 28, multiplier: 3, damageBonus: 1.10 },
+];
 const maxDamageLabels = 36;
 const shatterRadius = rank => 54 + rank * 12;
 const shatterDamage = rank => .55 + rank * .2;
 const circuitDistance = rank => 150 - rank * 20;
-const focusChance = rank => 8 + rank * 3;
 const healthTier = waveIndex => 2 ** Math.floor(waveIndex / 5);
 const characters = {
   chatgpt: { id: 'chatgpt', color: '#d4b8ff', titleColor: '#5c4479', name: 'ChatGPT', title: '银龙少女', portrait: 'silver-dragon', walk: 'dragon-walk',
@@ -122,8 +133,12 @@ const upgrades = [
   { name: '短咏回路', icon: 'circuit', price: 12, apply: p => { p.interval = Math.max(.12, p.interval * .75); },
     effect: rank => t('每级主武器间隔缩短 25%，最低 0.12 秒。移动 {0} 充能，下一次攻击首个命中放出电弧。', circuitDistance(rank)) +
       ' ' + t('电弧对附近另一目标造成 80% 伤害。只有一个目标时，追加 55% 伤害。') },
-  { name: '精准棱芯', icon: 'prism', price: 14,
-    effect: rank => t('武器直接命中暴击率提升至 {0}%，暴击伤害为 {1} 倍。', focusChance(rank), criticalMultiplier) },
+  { name: precisionName, icon: 'prism', price: 24, priceStep: 10, maxRank: precisionTiers.length - 1,
+    effect: rank => {
+      const stats = precisionTiers[rank];
+      const crit = t('武器直接命中暴击率 {0}%，暴击伤害 {1} 倍。', stats.chance, stats.multiplier);
+      return stats.damageBonus ? crit + ' ' + t('全伤害 +10%。') : crit;
+    } },
   { name: '轻羽鳞片', icon: 'boots', description: '移动速度 +20%，最高 390', price: 10, apply: p => { p.speed = Math.min(390, p.speed * 1.20); } },
   { name: '共鸣磁芯', icon: 'magnet', description: '芯片拾取范围 +48', price: 10, apply: p => { p.magnet += 48; } },
   { name: '银鳞修复', icon: 'scale', description: '生命上限 +22，恢复 42 点生命', price: 10, apply: p => {
@@ -145,7 +160,7 @@ const upgrades = [
 
 const artPath = id => 'art/' + id + '.webp';
 const art = Object.fromEntries([
-  'drone', 'flank', 'elite', 'wisp', 'sentry', 'chip', 'healing-flask', 'hostile', 'dragon-ward',
+  'drone', 'flank', 'elite', 'wisp', 'sentry', 'microchip', 'battery', 'boss-battery', 'hostile', 'dragon-ward',
   'dragon', 'nova', 'fan', 'prism', 'lance', 'orbit', 'fan-bolt', 'dragon-bolt', 'lance-bolt', 'page-bolt',
   ...stages.flatMap(({ floor, bosses }) => [floor, ...bosses.map(([, icon]) => icon)]),
   ...Object.values(characters).flatMap(({ id, walk }) => [walk, 'cast-' + id, 'spell-' + id, 'action-' + id]),
@@ -255,7 +270,7 @@ function startRun() {
     character, x: width / 2, y: height * .51, hp: character.hp, maxHp: character.hp,
     speed: character.speed, power: character.power, interval: character.interval, defense: character.defense,
     level: 1, xp: 0, weaponBonus: 1, magnet: 61, attack: .15, shotCount: 0, invulnerable: 0, stride: 0,
-    ranks: {}, moduleRanks: {}, cooldowns: {}, orbitAngle: 0, orbitHits: new WeakMap(), weaponTime: 0,
+    ranks: {}, moduleRanks: {}, starter: {}, boughtHere: new Set(), cooldowns: {}, orbitAngle: 0, orbitHits: new WeakMap(), weaponTime: 0,
     links: [], pulse: 0, circuitTravel: 0, moving: false, flip: false, split: false, mirrorSwing: null,
     ward: 0, wardCharge: 0, signatureEquipped: false, skillCooldown: 0, skillCast: null, damage: {},
     pose: 0, cast: 0, castAngle: 0, skillPose: 0, skillFacing: 1, hurtFlash: 0, recovery: 0, trail: 0,
@@ -278,12 +293,8 @@ function startRun() {
   el('gesture-tip').hidden = !coarsePointer.matches;
   enterMode(modes.starter);
   syncHud();
-  const cards = weapons.map(weapon => shopCard(t(weapon.name), t('免费'), t(weapon.description), false, () => {
-    if (mode !== modes.starter) return;
-    player.ranks[weapon.id] = 1;
-    startWave(0);
-  }, weapon.id, weaponReadout(weapon.id, 1)));
-  setPanel(t('开局商店'), t('免费选一件副武器，选定后开始第 1 波。'), [], cards);
+  rollShop();
+  drawShop();
 }
 
 function startWave(index) {
@@ -386,8 +397,8 @@ function rollShop() {
   while (offers.length < 2 && weaponPool.length) {
     offers.push(takeWeighted(weaponPool, weapon => player.ranks[weapon.id] ? 2 : 1));
   }
-  const eligible = item => moduleRank(item) < maxModuleRank && !player.boughtHere.has(item);
-  const pool = upgrades.filter(item => eligible(item) && (item.icon !== 'mirror' || wave > 0));
+  const eligible = item => moduleRank(item) < (item.maxRank ?? maxModuleRank) && !player.boughtHere.has(item);
+  const pool = upgrades.filter(item => eligible(item) && (item.icon !== 'mirror' || mode === modes.starter || wave > 0));
   const signature = player.character.signature;
   const moduleSlots = 3;
   // The sum of inclusion probabilities equals the number of slots.
@@ -444,8 +455,9 @@ const statNumber = value => Number(value.toFixed(2));
 const xpRequired = () => 14 + (player.level - 1) * 8;
 const moduleRank = item => player.moduleRanks[item.name] ?? 0;
 const signatureRank = () => moduleRank(player.character.signature);
+const critStats = () => precisionTiers[player.moduleRanks[precisionName] ?? 0];
 const moduleEffect = (item, rank) => item.effect ? item.effect(rank) : t('每级') + ' · ' + t(item.description);
-const attackMultiplier = () => (1 + (player.level - 1) * .06) * player.weaponBonus;
+const attackMultiplier = () => (1 + (player.level - 1) * .06) * player.weaponBonus * (critStats().damageBonus ?? 1);
 const damageReduction = () => Math.min(.40, player.defense / (player.defense + 36));
 
 function weaponReadout(id, rank) {
@@ -485,7 +497,7 @@ function pauseDetails() {
     ['生命', Math.ceil(player.hp) + ' / ' + player.maxHp],
     ['防御', player.defense + ' · ' + t('减伤 {0}%', statNumber(damageReduction() * 100))],
     ['全武器伤害加成', '+' + Math.round((attackMultiplier() - 1) * 100) + '%'],
-    ['武器暴击', focusChance(player.moduleRanks['精准棱芯'] ?? 0) + '% · ×' + criticalMultiplier],
+    ['武器暴击', critStats().chance + '% · ×' + critStats().multiplier],
     ['移速', t('{0} 单位/秒', statNumber(player.speed))],
     ['拾取范围', t('{0} 单位', statNumber(player.magnet))],
     ['芯片', chips],
@@ -582,32 +594,51 @@ function equipmentRow(icon, name, details) {
   return item;
 }
 
+function equipOffer(item, rank) {
+  if (item.id) {
+    player.ranks[item.id] = rank;
+    return;
+  }
+  player.moduleRanks[item.name] = rank;
+  if (item === player.character.signature) {
+    player.signatureEquipped = true;
+    if (player.character === characters.chatgpt) { player.ward = wardCapacity(); player.wardCharge = 0; }
+  } else item.apply?.(player);
+}
+
 function buildOffer(item) {
+  const free = mode === modes.starter;
+  const slot = item.id ? 'weapon' : 'module';
+  const selected = free && player.starter[slot] === item;
   const bought = player.boughtHere.has(item);
   const rank = item.id ? (player.ranks[item.id] ?? 0) : moduleRank(item);
   const nextRank = rank + (bought ? 0 : 1);
   const evolving = Boolean(item.id && nextRank > maxWeaponRank);
   const cost = item.id ? (evolving ? evolutionPrice : 16 + (nextRank - 1) * 6)
-    : item.price + (nextRank - 1) * (item === player.character.signature ? 8 : 5);
+    : item.price + (nextRank - 1) * (item.priceStep ?? (item === player.character.signature ? 8 : 5));
   const moduleUpgrade = !item.id && rank > 0 && !bought;
   const name = evolving ? t(item.evolution) : t(item.name) + (moduleUpgrade ? ' Lv.' + rank + ' → Lv.' : ' Lv.') + nextRank;
   const details = evolving ? t('满级进化') + ' · ' + t(item.evolvedDescription)
     : item.id ? t(item.description) : (item === player.character.signature ? t('角色专属') + ' · ' : '') + moduleEffect(item, nextRank);
-  return shopCard(name, bought ? t('已安装') : '◇ ' + cost, details, bought || chips < cost, () => {
+  const badge = free ? (selected ? t('已选') : t('免费')) : bought ? t('已安装') : t('{0} 芯片', cost);
+  const card = shopCard(name, badge, details, !free && (bought || chips < cost), () => {
+    if (free) {
+      if (mode !== modes.starter || !offers.includes(item)) return;
+      player.starter[slot] = selected ? null : item;
+      const scroll = el('panel-body').scrollTop;
+      drawShop();
+      el('panel-body').scrollTop = scroll;
+      return;
+    }
     if (mode !== modes.shop || !offers.includes(item) || player.boughtHere.has(item) || chips < cost) return;
     chips -= cost;
     player.boughtHere.add(item);
-    if (item.id) player.ranks[item.id] = nextRank;
-    else {
-      player.moduleRanks[item.name] = nextRank;
-      if (item === player.character.signature) {
-        player.signatureEquipped = true;
-        if (player.character === characters.chatgpt) { player.ward = wardCapacity(); player.wardCharge = 0; }
-      } else item.apply?.(player);
-    }
+    equipOffer(item, nextRank);
     syncHud();
     drawShop();
   }, item.icon ?? item.id, item.id ? weaponReadout(item.id, nextRank) : '');
+  if (free) card.setAttribute('aria-pressed', String(selected));
+  return card;
 }
 
 function evolutionPicker(items) {
@@ -656,6 +687,18 @@ function drawShop() {
     : weaponOffers.map(buildOffer);
   const cards = [shopSection('副武器', weaponCards, 2),
     shopSection('模块', offers.filter(item => !item.id).map(buildOffer), 3)];
+  if (mode === modes.starter) {
+    const { weapon, module } = player.starter;
+    setPanel(t('开局商店'), t('从商店免费选一件副武器和一个模块。'), [
+      [t('进入第 {0} 波', 1), () => {
+        if (mode !== modes.starter || !weapon || !module) return;
+        equipOffer(weapon, 1);
+        equipOffer(module, 1);
+        startWave(0);
+      }, !weapon || !module],
+    ], cards);
+    return;
+  }
   const nextBoss = (wave + 2) % 5 === 0 ? stage.bosses[Math.floor((wave + 1) / 5)]?.[0] : null;
   const cost = 8 + rerolls * 4;
   const messages = [boss?.hp <= 0 && t('{0}已击败。', t(boss.profile.name)),
@@ -663,7 +706,7 @@ function drawShop() {
     nextBoss ? t('下一波首领') + ' · ' + t(nextBoss) : wave === 1 && t('下一波开始会遇到远程炮台。')];
   setPanel(t('波间补给'), messages.filter(Boolean).join(' '), [
     [t('进入第 {0} 波', wave + 2), () => { if (mode === modes.shop) startWave(wave + 1); }],
-    [t('刷新') + ' · ◇ ' + cost, () => {
+    [t('刷新') + ' · ' + t('{0} 芯片', cost), () => {
       if (mode !== modes.shop || chips < cost) return;
       chips -= cost;
       rerolls++;
@@ -693,7 +736,7 @@ function finish(won, reason = '') {
     }]);
   }
   const modules = Object.entries(player.moduleRanks).map(([name, rank]) => t(name) + ' Lv.' + rank);
-  const summary = [reason, t('抵达第 {0} 波 · Lv.{1} · 击倒 {2} 个敌人。', wave + 1, player.level, kills),
+  const summary = [reason, t('抵达第 {0} 波 · Lv.{1} · 击倒 {2} 个敌人。', wave + 1, player.level, kills), t('{0} 芯片', chips),
     modules.length && t('已装模块') + ' · ' + modules.join(gameLanguage === 'en' ? ', ' : '、')];
   setPanel(won ? t(stage.name) + ' · ' + t('已通关') : t('防卫中断'), summary.filter(Boolean).join(' '),
     actions, [], damageDetails());
@@ -704,7 +747,9 @@ function syncHud() {
   const clock = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
   updateText('time', remaining === null ? t('不限时') : clock);
   updateText('wave-label', t('第 {0} / {1} 波', wave + 1, stage.waves.length));
-  updateText('chips', '◇ ' + chips);
+  updateText('chip-count', String(chips));
+  const chipLabel = t('{0} 芯片', chips);
+  if (el('chips').getAttribute('aria-label') !== chipLabel) el('chips').setAttribute('aria-label', chipLabel);
   updateText('hud-character', player.character.name);
   updateText('hud-level', 'Lv.' + player.level + ' · ' + player.xp + '/' + xpRequired() + ' XP');
   updateText('health-text', Math.ceil(player.hp) + ' / ' + player.maxHp);
@@ -997,7 +1042,7 @@ function triggerPrimaryModules(modules, enemy, damage) {
 }
 
 function rollCritical() {
-  return Math.random() * 100 < focusChance(player.moduleRanks['精准棱芯'] ?? 0);
+  return Math.random() * 100 < critStats().chance;
 }
 
 function weaponHit(enemy, damage, source, returningPage = false) {
@@ -1006,7 +1051,7 @@ function weaponHit(enemy, damage, source, returningPage = false) {
 }
 
 function damageEnemy(enemy, damage, source = 'main', returningPage = false, critical = false) {
-  if (!applyDamage(enemy, critical ? damage * criticalMultiplier : damage, source, critical)) return false;
+  if (!applyDamage(enemy, critical ? damage * critStats().multiplier : damage, source, critical)) return false;
   if (!player.signatureEquipped || player.character !== characters.claude) return true;
   if (returningPage) {
     if (enemy.hp > 0) enemy.inkMark = 5;
@@ -1445,13 +1490,17 @@ function stepShots(dt) {
     kills++;
     gainExperience(enemy);
     spark(enemy.x, enemy.y, enemy === boss ? '#f3a8fb' : '#81ffe5', enemy === boss ? 28 : 9);
-    if (enemy === boss && !enemy.profile.final) {
+    if (enemy === boss) {
       const x = clamp(enemy.x, 35, width - 35);
-      drops.push({ x: x - 14, y: enemy.y, heal: true });
-      if (Math.random() < .30) drops.push({ x: x + 14, y: enemy.y, heal: true });
-    } else if (enemy !== boss) {
-      if (Math.random() < chipRates[Math.min(wave, chipRates.length - 1)]) drops.push({ x: enemy.x, y: enemy.y });
-      if (Math.random() < (enemy.type === 'elite' ? .05 : .01)) drops.push({ x: enemy.x + 5, y: enemy.y, heal: true });
+      drops.push({ x, y: enemy.y, value: bossChipLoot, autoCollect: true });
+      drops.push({ x: x - 14, y: enemy.y, heal: bossBatteryHeal, autoCollect: enemy.profile.final });
+      if (Math.random() < .30) drops.push({ x: x + 14, y: enemy.y, heal: bossBatteryHeal, autoCollect: enemy.profile.final });
+    } else {
+      const elite = enemy.type === 'elite';
+      if (elite || Math.random() < chipRates[Math.min(wave, chipRates.length - 1)]) {
+        drops.push({ x: enemy.x, y: enemy.y, value: elite ? eliteChipLoot : 1 });
+      }
+      if (Math.random() < (elite ? .05 : .01)) drops.push({ x: enemy.x + 5, y: enemy.y, heal: batteryHeal });
     }
     return false;
   });
@@ -1526,13 +1575,13 @@ function step(dt) {
   stepShots(dt);
   drops = drops.filter(drop => {
     const gap = distance(player, drop);
-    if (drop.heal && (player.hp >= player.maxHp || player.hp <= 0)) return true;
-    if (gap <= 14) {
+    if (drop.heal && (player.hp >= player.maxHp || player.hp <= 0)) return !drop.autoCollect;
+    if (gap <= 14 || drop.autoCollect) {
       if (drop.heal) {
-        player.hp = Math.min(player.maxHp, player.hp + 20);
+        player.hp = Math.min(player.maxHp, player.hp + player.maxHp * drop.heal);
         player.recovery = .48;
-        spark(player.x, player.y, '#74ff93', 12);
-      } else chips++;
+        spark(player.x, player.y, drop.heal === bossBatteryHeal ? '#ffcf70' : '#74ff93', 12);
+      } else chips += drop.value;
       return false;
     }
     if (gap < player.magnet) {
@@ -1892,11 +1941,12 @@ function render() {
   }
   ctx.lineWidth = 1;
   for (const drop of drops) {
+    const bossBattery = drop.heal === bossBatteryHeal;
+    const id = bossBattery ? 'boss-battery' : drop.heal ? 'battery' : 'microchip';
     const lift = drop.heal && !reducedMotion.matches ? Math.sin(player.pose * 5 + drop.x * .02) * 2 : 0;
-    if (drop.heal) circle(drop.x, drop.y + 4, 11, '#54ff7030');
-    if (!sprite(drop.heal ? 'healing-flask' : 'chip', drop.x, drop.y + lift, drop.heal ? 29 : 15)) {
-      diamond(drop.x, drop.y, 5, 7, drop.heal ? '#aaffbb' : '#76ebd1');
-    }
+    if (drop.heal) circle(drop.x, drop.y + 4, 11, bossBattery ? '#ffbb4c66' : '#54ff7050');
+    const size = bossBattery ? 32 : drop.heal ? 27 : drop.value > 1 ? 21 : 16;
+    if (!sprite(id, drop.x, drop.y + lift, size)) diamond(drop.x, drop.y, 5, 7, bossBattery ? '#ffc865' : '#76ebd1');
   }
   for (const enemy of enemies) drawEnemy(enemy);
   if (player.pulse > 0) {

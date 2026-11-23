@@ -97,7 +97,8 @@ canvas, .move-zone { position: absolute; inset: 0; width: 100%; height: 100%; to
 .wave span { color: #d6c4f0; font-size: 13px; }
 .wave strong { font-size: 18px; font-variant-numeric: tabular-nums; line-height: 1; }
 .utility { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.chips { font-size: 14px; padding: 8px 6px; white-space: nowrap; color: #a7ffec; }
+.chips { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; padding: 7px 6px; white-space: nowrap; color: #a7ffec; }
+.chips img { width: 18px; height: 18px; object-fit: contain; }
 .icon-button { width: 44px; height: 44px; font-weight: 800; pointer-events: auto; }
 .boss-hud { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 73px); left: 50%; transform: translateX(-50%); width: min(86%, 420px); color: #ffd0e1; pointer-events: none; z-index: 2; }
 .boss-status { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; text-shadow: 0 1px 4px #050307, 0 1px 3px #050307; }
@@ -150,6 +151,8 @@ canvas, .move-zone { position: absolute; inset: 0; width: 100%; height: 100%; to
 .offer.has-weapon-icon small { grid-column: 2 / -1; }
 .item-icon { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 5px #b98aff66); }
 .offer:disabled { opacity: .68; cursor: default; }
+.offer[aria-pressed="true"] { border-color: #e1c7ff; background: #453162; box-shadow: inset 0 0 0 1px #b796ed; }
+.offer span { white-space: nowrap; }
 .offer small { color: var(--muted); grid-column: 1 / -1; font-size: 13px; }
 .offer small.weapon-stats { color: #efe0ff; font-weight: 700; line-height: 1.4; }
 .offer span { color: #a7ffec; }
