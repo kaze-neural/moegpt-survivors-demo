@@ -1,50 +1,59 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#100d20">
-  <title>星光客厅防卫战 · MoeGPT</title>
+  <title>Starlit Lounge Defense · MoeGPT</title>
   <link rel="stylesheet" href="style.css">
+  <script defer src="i18n.js"></script>
   <script defer src="game.js"></script>
 </head>
 <body>
   <main id="app">
     <section id="home" class="home" aria-labelledby="title">
-      <header class="brand"><span class="mark" aria-hidden="true">✦</span> MOEGPT <span class="brand-divider"></span> 星光客厅</header>
+      <header class="brand">
+        <span class="mark" aria-hidden="true">✦</span> MOEGPT <span class="brand-divider"></span>
+        <span data-text="星光客厅">Starlit Lounge</span>
+        <select id="language-select" data-label="语言" aria-label="Language">
+          <option value="en" lang="en">English</option>
+          <option value="zh-CN" lang="zh-CN">简体中文</option>
+          <option value="ja" lang="ja">日本語</option>
+        </select>
+      </header>
       <div class="hero">
         <div class="portrait" id="portrait-stage">
           <div class="orbit" aria-hidden="true"></div>
           <div class="orbit orbit-inner" aria-hidden="true"></div>
           <div class="portrait-motes" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          <img id="character-portrait" src="art/silver-dragon.webp" width="900" height="980" alt="ChatGPT · 银龙少女">
-          <span id="portrait-caption">银龙少女 · ChatGPT</span>
+          <img id="character-portrait" src="art/silver-dragon.webp" width="900" height="980" alt="ChatGPT · Silver Dragon">
+          <span id="portrait-caption">Silver Dragon · ChatGPT</span>
         </div>
         <div class="intro">
-          <h1 id="title">星光客厅<br class="desktop-break">防卫战</h1>
-          <div id="character-select" class="character-select" role="group" aria-label="选择出战角色">
+          <h1 id="title" data-text="星光客厅防卫战">Starlit Lounge Defense</h1>
+          <div id="character-select" class="character-select" role="group" data-label="选择出战角色" aria-label="Choose a character">
             <button type="button" data-character="chatgpt" aria-pressed="true">ChatGPT</button>
             <button type="button" data-character="claude" aria-pressed="false">Claude</button>
             <button type="button" data-character="deepseek" aria-pressed="false">DeepSeek</button>
             <button type="button" data-character="gemini" aria-pressed="false">Gemini</button>
             <button type="button" data-character="grok" aria-pressed="false">Grok</button>
           </div>
-          <div class="weapon"><span class="weapon-icon"><img id="intro-weapon-icon" src="art/dragon.webp" alt=""></span><div><strong id="intro-weapon-name">三段龙息</strong><p id="intro-weapon-description">自动锁敌，每第三击发出穿透波。</p></div></div>
-          <p class="signature-note"><span id="intro-skill">银龙回响 · 以自身为中心释放三道逐渐扩大的震波。冷却 9 秒。</span><small id="intro-signature">专属模块 · 龙翼护印</small></p>
-          <div id="stage-select" class="stage-select" role="group" aria-label="选择关卡">
-            <button type="button" data-stage="0" aria-pressed="true"><strong>故障中继站</strong><small>10 波</small></button>
-            <button type="button" data-stage="1" aria-pressed="false"><strong>碎光回廊</strong><small>15 波</small></button>
-            <button type="button" data-stage="2" aria-pressed="false"><strong>天穹裂隙</strong><small>20 波</small></button>
+          <div class="weapon"><span class="weapon-icon"><img id="intro-weapon-icon" src="art/dragon.webp" alt=""></span><div><strong id="intro-weapon-name"></strong><p id="intro-weapon-description"></p></div></div>
+          <p class="signature-note"><span id="intro-skill"></span><small id="intro-signature"></small></p>
+          <div id="stage-select" class="stage-select" role="group" data-label="选择关卡" aria-label="Choose a stage">
+            <button type="button" data-stage="0" aria-pressed="true"><strong>Broken Relay</strong><small>10 waves</small></button>
+            <button type="button" data-stage="1" aria-pressed="false"><strong>Shattered Gallery</strong><small>15 waves</small></button>
+            <button type="button" data-stage="2" aria-pressed="false"><strong>Astral Rift</strong><small>20 waves</small></button>
           </div>
-          <button class="primary" id="start">开始防卫</button>
-          <p class="controls-note">手机拖动摇杆 · 电脑 WASD / 方向键</p>
+          <button class="primary" id="start" data-text="开始防卫">Start Defense</button>
+          <p class="controls-note" data-text="手机拖动摇杆 · 电脑 WASD / 方向键">Drag to move · WASD or arrow keys on desktop</p>
         </div>
       </div>
-      <footer>非官方同人作品 <span>·</span> 单人试玩</footer>
+      <footer data-text="非官方同人作品 · 单人试玩">Unofficial fan game · Single-player demo</footer>
     </section>
 
-    <section id="battle" class="battle" hidden aria-label="防卫战">
-      <canvas id="arena" aria-label="战斗画面"></canvas>
+    <section id="battle" class="battle" hidden data-label="防卫战" aria-label="Defense">
+      <canvas id="arena" data-label="战斗画面" aria-label="Battlefield"></canvas>
       <header class="hud">
         <div class="status">
           <div class="status-line"><strong id="hud-character">ChatGPT</strong><span id="health-text">100 / 100</span></div>
@@ -52,19 +61,19 @@
           <div class="xp"><i id="xp-fill"></i></div>
           <div id="hud-level" class="hud-level">Lv.1 · 0/14 XP</div>
         </div>
-        <div class="wave"><span id="wave-label">第 1 / 10 波</span><strong id="time">00:22</strong></div>
-        <div class="utility"><span id="chips" class="chips">◇ 0</span><button id="pause" class="icon-button" aria-label="暂停">Ⅱ</button></div>
+        <div class="wave"><span id="wave-label">Wave 1 / 10</span><strong id="time">00:22</strong></div>
+        <div class="utility"><span id="chips" class="chips">◇ 0</span><button id="pause" class="icon-button" data-label="暂停" aria-label="Pause">Ⅱ</button></div>
       </header>
       <div id="boss-hud" class="boss-hud" hidden>
         <div class="boss-status"><strong id="boss-name"></strong><span id="boss-phase-value"></span></div>
         <div id="boss-bars" class="boss-bars"></div>
       </div>
       <div id="wave-message" class="wave-message" aria-live="polite"></div>
-      <div id="move-zone" class="move-zone" aria-label="拖动移动"></div>
+      <div id="move-zone" class="move-zone" data-label="拖动移动" aria-label="Drag to move"></div>
       <div id="stick" class="stick" hidden aria-hidden="true"><i></i></div>
-      <div id="gesture-tip" class="gesture-tip">在下半屏拖动以移动</div>
+      <div id="gesture-tip" class="gesture-tip" data-text="在下半屏拖动以移动">Drag the lower half of the screen to move</div>
       <button type="button" id="skill-use" class="skill-use"><strong id="skill-name"></strong><small id="skill-status"></small></button>
-      <div id="test-speed" class="test-speed" role="group" aria-label="测试倍速" hidden>
+      <div id="test-speed" class="test-speed" role="group" data-label="测试倍速" aria-label="Test speed" hidden>
         <button type="button" data-speed="1" aria-pressed="true">1×</button>
         <button type="button" data-speed="2" aria-pressed="false">2×</button>
         <button type="button" data-speed="5" aria-pressed="false">5×</button>

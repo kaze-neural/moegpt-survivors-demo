@@ -3,20 +3,6 @@
 const el = id => document.getElementById(id);
 const canvas = el('arena');
 const ctx = canvas.getContext('2d');
-const art = Object.fromEntries([
-  'relay-arena', 'glass-arena', 'sky-arena', 'drone', 'flank', 'elite', 'wisp',
-  ...['chatgpt', 'claude', 'deepseek', 'gemini', 'grok'].flatMap(id => ['cast-' + id, 'spell-' + id, 'action-' + id]),
-  'deepseek-walk', 'gemini-walk', 'grok-walk',
-  'dragon', 'nova', 'fan', 'prism', 'lance', 'orbit', 'chip', 'hostile',
-  'fan-bolt', 'dragon-bolt', 'lance-bolt', 'dragon-walk', 'claude-walk', 'page-bolt',
-  'healing-flask', 'sentry', 'dragon-ward',
-  'relay-warden', 'relay-core', 'glass-mantis', 'tide-serpent', 'chronograph',
-  'ember-hound', 'eclipse-knight', 'moth-empress', 'astral-dragon',
-].map(id => {
-  const image = new Image();
-  image.src = 'art/' + id + '.webp';
-  return [id, image];
-}));
 const keys = new Set();
 const directions = {
   w: [0, -1], arrowup: [0, -1], s: [0, 1], arrowdown: [0, 1],
@@ -55,42 +41,44 @@ const joystick = { id: null, x: 0, y: 0, dx: 0, dy: 0 };
 const maxWeaponRank = 4;
 const evolutionPrice = 58;
 const showTestTools = true;
+const ultimateCooldown = 45;
+const healthTier = waveIndex => 2 ** Math.floor(waveIndex / 5);
 const characters = {
   chatgpt: { id: 'chatgpt', color: '#d4b8ff', titleColor: '#5c4479', name: 'ChatGPT', title: '银龙少女', portrait: 'silver-dragon', walk: 'dragon-walk',
     weapon: '三段龙息', icon: 'dragon', description: '自动锁敌，每第三击发出穿透波。',
     hp: 100, speed: 220, power: 15, interval: .42, defense: 2,
-    skill: { name: '银龙回响', icon: 'dragon-ward', cooldown: 9, interval: .25, reaches: [140, 185, 230], hits: [115, 145, 190],
-      description: '以自身为中心释放三道逐渐扩大的震波。冷却 9 秒。' },
+    skill: { name: '银龙回响', icon: 'dragon-ward', interval: .25, reaches: [165, 220, 280], hits: [280, 350, 470],
+      description: '以自身为中心释放三道逐渐扩大的震波。' },
     signature: { name: '龙翼护印', icon: 'dragon-ward', price: 22,
-      effect: rank => '抵消下一击最多 ' + (34 + 12 * (rank - 1)) + ' 点伤害，累计移动 ' + (6 - .75 * (rank - 1)) + ' 秒充满。' } },
+      effect: rank => t('抵消下一击最多 {0} 点伤害，累计移动 {1} 秒充满。', 34 + 12 * (rank - 1), 6 - .75 * (rank - 1)) } },
   claude: { id: 'claude', color: '#ffd291', titleColor: '#805039', name: 'Claude', title: '橘发书页少女', portrait: 'claude-portrait', walk: 'claude-walk',
     weapon: '回卷书页', icon: 'book', description: '投出的书页会飞回身边，去程和回程都能穿透并命中敌人。',
     hp: 108, speed: 214, power: 17, interval: .56, defense: 3,
-    skill: { name: '终章书域', icon: 'book', cooldown: 10, interval: .34, radius: 168, hits: [90, 90, 90, 90, 90],
-      description: '在附近敌人脚下展开书域，连续造成五次伤害。冷却 10 秒。' },
+    skill: { name: '终章书域', icon: 'book', interval: .34, radius: 205, hits: [200, 200, 220, 220, 260],
+      description: '在附近敌人脚下展开书域，连续造成五次伤害。' },
     signature: { name: '余墨共鸣', icon: 'book', price: 22,
-      effect: rank => '回程书页留印，后续命中引爆。追加触发伤害的 ' + (70 + (rank - 1) * 15) + '% 加 ' + (48 + (rank - 1) * 16) + '，附近敌人承受其中 55%。' } },
+      effect: rank => t('回程书页留印，后续命中引爆。追加触发伤害的 {0}% 加 {1}，附近敌人承受其中 55%。', 70 + (rank - 1) * 15, 48 + (rank - 1) * 16) } },
   deepseek: { id: 'deepseek', color: '#8ee7ff', titleColor: '#245979', name: 'DeepSeek', title: '鲸尾推理少女', portrait: 'deepseek-portrait', walk: 'deepseek-walk',
     weapon: '声呐水珠', icon: 'spell-deepseek', description: '水珠命中后炸开，周围敌人受到 60% 溅射伤害。',
     hp: 112, speed: 211, power: 24, interval: .68, defense: 2,
-    skill: { name: '鲸落潮汐', icon: 'spell-deepseek', cooldown: 10, interval: .21, radius: 93, hits: [135, 145, 155, 175],
-      description: '朝最近敌人的方向放出灵鲸，沿直线连续掀起四重潮浪。冷却 10 秒。' },
+    skill: { name: '鲸落潮汐', icon: 'spell-deepseek', interval: .21, radius: 118, hits: [300, 330, 380, 450],
+      description: '朝最近敌人的方向放出灵鲸，沿直线连续掀起四重潮浪。' },
     signature: { name: '深海回声', icon: 'spell-deepseek', price: 22,
-      effect: rank => '水珠在落点追加一道回声，半径 ' + (78 + rank * 12) + '，造成主武器伤害的 ' + (45 + rank * 20) + '%。' } },
+      effect: rank => t('水珠在落点追加一道回声，半径 {0}，造成主武器伤害的 {1}%。', 78 + rank * 12, 45 + rank * 20) } },
   gemini: { id: 'gemini', color: '#e4b0ff', titleColor: '#6b3d82', name: 'Gemini', title: '星光猫耳少女', portrait: 'gemini-portrait', walk: 'gemini-walk',
     weapon: '双子飞星', icon: 'spell-gemini', description: '一对飞星分别瞄准最近的两个敌人，落单的敌人会被同时锁定。',
     hp: 94, speed: 237, power: 13, interval: .54, defense: 1,
-    skill: { name: '双星连图', icon: 'spell-gemini', cooldown: 11, interval: .32, radius: 78, hits: [120, 140, 175],
-      description: '依次锁定附近至多三个不同目标，引落星爆。目标不足时会再次锁敌。冷却 11 秒。' },
+    skill: { name: '双星连图', icon: 'spell-gemini', interval: .32, radius: 113, hits: [280, 340, 460],
+      description: '依次锁定附近至多三个不同目标，引落星爆。目标不足时会再次锁敌。' },
     signature: { name: '伴星共振', icon: 'spell-gemini', price: 22,
-      effect: rank => '每第三轮飞星命中时弹向附近另一名敌人，单体时原地回响，造成主武器伤害的 ' + (55 + 25 * rank) + '%。' } },
+      effect: rank => t('每第三轮飞星命中时弹向附近另一名敌人，单体时原地回响，造成主武器伤害的 {0}%。', 55 + 25 * rank) } },
   grok: { id: 'grok', color: '#ffd779', titleColor: '#775331', name: 'Grok', title: '黑金战斧少女', portrait: 'grok-portrait', walk: 'grok-walk',
     weapon: '弦月战斧', icon: 'spell-grok', description: '自动转向敌人，横扫身前半径 126 的扇区。一次挥击可以劈中整群敌人。',
     hp: 122, speed: 226, power: 36, interval: .68, defense: 3,
-    skill: { name: '黑金断月', icon: 'spell-grok', cooldown: 9, interval: .36, reaches: [155, 190, 220], hits: [150, 170, 200],
-      description: '追瞄前方连劈两斧，第三斧旋身横扫四周。冷却 9 秒。' },
+    skill: { name: '黑金断月', icon: 'spell-grok', interval: .36, reaches: [180, 230, 275], hits: [340, 410, 560],
+      description: '追瞄前方连劈两斧，第三斧旋身横扫四周。' },
     signature: { name: '裂月斧纹', icon: 'spell-grok', price: 22,
-      effect: rank => '每次主武器斧击命中时迸出金色裂纹，追加该次伤害的 ' + (25 + rank * 15) + '%。' } },
+      effect: rank => t('每次主武器斧击命中时迸出金色裂纹，追加该次伤害的 {0}%。', 25 + rank * 15) } },
 };
 const pageSpeed = 445;
 const pageOutTime = .53;
@@ -128,8 +116,9 @@ const upgrades = [
     p.maxHp += 22;
     p.hp = Math.min(p.maxHp, p.hp + 42);
   } },
-  { name: '镜像进程', icon: 'mirror', description: '主武器分为两次攻击', price: 16,
-    effect: rank => (player.character.id === 'grok' ? '本体挥斧后，侧面的镜像反手追斩。' : '主武器双重攻击。') + '每击保留 ' + [78, 88, 100][rank - 1] + '% 伤害。首次安装扣除最多 24 拾取范围。',
+  { name: '镜像进程', icon: 'mirror', price: 16,
+    effect: rank => t(player.character.id === 'grok' ? '本体挥斧后，侧面的镜像反手追斩。' : '主武器双重攻击。') + ' ' +
+      t('每击保留 {0}% 伤害。首次安装扣除最多 24 拾取范围。', [78, 88, 100][rank - 1]),
     apply: p => {
       if (!p.split) p.magnet = Math.max(22, p.magnet - 24);
       p.split = true;
@@ -139,6 +128,18 @@ const upgrades = [
   { name: '全频校准', icon: 'nova', description: '全部武器伤害 +25%，与等级加成相乘。', price: 17,
     apply: p => { p.weaponBonus *= 1.25; } },
 ];
+
+const artPath = id => 'art/' + id + '.webp';
+const art = Object.fromEntries([
+  'drone', 'flank', 'elite', 'wisp', 'sentry', 'chip', 'healing-flask', 'hostile', 'dragon-ward',
+  'dragon', 'nova', 'fan', 'prism', 'lance', 'orbit', 'fan-bolt', 'dragon-bolt', 'lance-bolt', 'page-bolt',
+  ...stages.flatMap(({ floor, bosses }) => [floor, ...bosses.map(([, icon]) => icon)]),
+  ...Object.values(characters).flatMap(({ id, walk }) => [walk, 'cast-' + id, 'spell-' + id, 'action-' + id]),
+].map(id => {
+  const image = new Image();
+  image.src = artPath(id);
+  return [id, image];
+}));
 
 let selectedCharacter = 'chatgpt';
 let stageIndex = 0;
@@ -166,17 +167,36 @@ function selectCharacter(id) {
   const portrait = el('portrait-stage');
   portrait.getAnimations?.().filter(animation => animation.id === 'arrival').forEach(animation => animation.cancel());
   if (!reducedMotion.matches) portrait.animate?.([{ opacity: .68, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }], { id: 'arrival', duration: 350, easing: 'ease-out' });
-  el('character-portrait').src = 'art/' + character.portrait + '.webp';
-  el('character-portrait').alt = character.name + ' · ' + character.title;
-  el('portrait-caption').textContent = character.title + ' · ' + character.name;
-  el('intro-weapon-icon').src = 'art/' + character.icon + '.webp';
-  el('intro-weapon-name').textContent = character.weapon;
-  el('intro-weapon-description').textContent = character.description;
-  el('intro-skill').textContent = character.skill.name + ' · ' + character.skill.description;
-  el('intro-signature').textContent = '专属模块 · ' + character.signature.name;
+  el('character-portrait').src = artPath(character.portrait);
+  el('character-portrait').alt = character.name + ' · ' + t(character.title);
+  el('portrait-caption').textContent = t(character.title) + ' · ' + character.name;
+  el('intro-weapon-icon').src = artPath(character.icon);
+  el('intro-weapon-name').textContent = t(character.weapon);
+  el('intro-weapon-description').textContent = t(character.description);
+  el('intro-skill').textContent = t(character.skill.name) + ' · ' + skillDescription(character.skill);
+  el('intro-signature').textContent = t('专属模块') + ' · ' + t(character.signature.name);
   for (const button of el('character-select').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', button.dataset.character === id);
   }
+}
+
+function skillDescription(skill) {
+  return t(skill.description) + ' ' + t('冷却 {0} 秒', ultimateCooldown);
+}
+
+function setGameLanguage(language) {
+  gameLanguage = language;
+  document.documentElement.lang = language;
+  document.title = t('星光客厅防卫战') + ' · MoeGPT';
+  el('language-select').value = language;
+  for (const label of document.querySelectorAll('[data-text]')) label.textContent = t(label.dataset.text);
+  for (const label of document.querySelectorAll('[data-label]')) label.setAttribute('aria-label', t(label.dataset.label));
+  for (const button of el('stage-select').querySelectorAll('button')) {
+    const chapter = stages[Number(button.dataset.stage)];
+    button.querySelector('strong').textContent = t(chapter.name);
+    button.querySelector('small').textContent = t('{0} 波', chapter.waves.length);
+  }
+  selectCharacter(selectedCharacter);
 }
 
 function selectStage(index) {
@@ -239,24 +259,32 @@ function startRun() {
   el('gesture-tip').hidden = !coarsePointer.matches;
   enterMode(modes.starter);
   syncHud();
-  const cards = weapons.map(weapon => shopCard(weapon.name, '免费', weapon.description, false, () => {
+  const cards = weapons.map(weapon => shopCard(t(weapon.name), t('免费'), t(weapon.description), false, () => {
     if (mode !== modes.starter) return;
     player.ranks[weapon.id] = 1;
     startWave(0);
   }, weapon.id, weaponReadout(weapon.id, 1)));
-  setPanel('开局商店', '免费选一件副武器，选定后开始第 1 波。', [], cards);
+  setPanel(t('开局商店'), t('免费选一件副武器，选定后开始第 1 波。'), [], cards);
 }
 
 function startWave(index) {
+  const healthGrowth = healthTier(index) / healthTier(wave);
+  if (healthGrowth > 1) {
+    for (const enemy of enemies) {
+      if (enemy.hp <= 0 || enemy.profile) continue;
+      enemy.hp *= healthGrowth;
+    }
+  }
   wave = index;
   remaining = stage.waves[index];
   spawnTimer = .35;
   banner = 1.5;
   const entry = (index + 1) % 5 === 0 ? stage.bosses[Math.floor(index / 5)] : null;
-  const [name, icon, hp, pattern] = entry ?? [];
+  const [name, icon, baseHp, pattern] = entry ?? [];
   boss = null;
-  el('wave-message').textContent = entry ? name + '来袭' : '第 ' + (index + 1) + ' 波';
+  el('wave-message').textContent = entry ? t('{0}来袭', t(name)) : t('第 {0} 波', index + 1);
   if (entry) {
+    const hp = baseHp * healthTier(index);
     const final = index === stage.waves.length - 1;
     const profile = { name, icon, pattern, final, floors: phaseFloors[final ? 3 : 2] };
     const y = height * .24;
@@ -314,7 +342,7 @@ function togglePause() {
     el('pause').focus();
   } else if (mode === modes.play) {
     enterMode(modes.pause);
-    setPanel('已暂停', '', [['继续战斗', togglePause], ['返回首页', home]], [], pauseDetails());
+    setPanel(t('已暂停'), '', [[t('继续战斗'), togglePause], [t('返回首页'), home]], [], pauseDetails());
   }
 }
 
@@ -389,7 +417,7 @@ function itemIcon(id) {
   const icon = document.createElement('img');
   icon.className = 'item-icon';
   icon.alt = '';
-  icon.src = 'art/' + id + '.webp';
+  icon.src = artPath(id);
   return icon;
 }
 
@@ -397,34 +425,35 @@ const statNumber = value => Number(value.toFixed(2));
 const xpRequired = () => 14 + (player.level - 1) * 8;
 const moduleRank = item => player.moduleRanks[item.name] ?? 0;
 const signatureRank = () => moduleRank(player.character.signature);
-const moduleEffect = (item, rank) => item.effect ? item.effect(rank) : '每级 · ' + item.description;
+const moduleEffect = (item, rank) => item.effect ? item.effect(rank) : t('每级') + ' · ' + t(item.description);
 const attackMultiplier = () => (1 + (player.level - 1) * .06) * player.weaponBonus;
 const damageReduction = () => Math.min(.40, player.defense / (player.defense + 36));
 
 function weaponReadout(id, rank) {
+  const interval = t('每 {0} 秒', statNumber(player.interval));
   if (id === player.character.icon && !['book', 'dragon'].includes(id)) {
-    return '每击 ' + statNumber(mainDamage()) + ' · 每 ' + statNumber(player.interval) + ' 秒 · ' + player.character.description +
-      (player.split ? ' · 镜像双重攻击' : '');
+    return [t('每击 {0}', statNumber(mainDamage())), interval, t(player.character.description),
+      player.split && t('镜像双重攻击')].filter(Boolean).join(' · ');
   }
   if (id === 'dragon' || id === 'book') {
     const split = player.split ? ' ×2' : '';
     if (id === 'book') {
-      return '去程 ' + statNumber(mainDamage()) + split + ' · 回程 ' + statNumber(mainDamage(.75)) + split +
-        ' · 每 ' + statNumber(player.interval) + ' 秒 · 去程约 ' + pageReach + ' · 双程穿透';
+      return [t('去程 {0}', statNumber(mainDamage())) + split, t('回程 {0}', statNumber(mainDamage(.75))) + split,
+        interval, t('去程约 {0}', pageReach), t('双程穿透')].join(' · ');
     }
-    return '普通 ' + statNumber(mainDamage()) + split + ' · 第三击 ' + statNumber(mainDamage(1.65)) + split +
-      '（穿透） · 每 ' + statNumber(player.interval) + ' 秒';
+    return [t('普通 {0}', statNumber(mainDamage())) + split, t('第三击 {0}', statNumber(mainDamage(1.65))) + split +
+      ' (' + t('穿透') + ')', interval].join(' · ');
   }
   const stats = weaponStats[id](rank);
-  const values = ['伤害 ' + statNumber(stats.damage * attackMultiplier())];
-  if (stats.interval) values.push('每 ' + stats.interval + ' 秒');
-  if (stats.hitInterval) values.push('同目标间隔 ' + stats.hitInterval + ' 秒');
-  if (stats.radius) values.push('半径 ' + stats.radius);
-  if (stats.count) values.push('弹数 ' + stats.count);
-  if (stats.pierces) values.push('穿透');
-  if (stats.targets) values.push('最多 ' + stats.targets + ' 个目标', '起手 ' + stats.reach + ' / 跳跃 ' + stats.jump);
-  if (stats.paths) values.push(stats.paths.map(([radius, count]) => count + ' 刃 / 轨道半径 ' + radius).join(' + '),
-    '刃半径 ' + stats.bladeRadius);
+  const values = [t('伤害 {0}', statNumber(stats.damage * attackMultiplier()))];
+  if (stats.interval) values.push(t('每 {0} 秒', stats.interval));
+  if (stats.hitInterval) values.push(t('同目标间隔 {0} 秒', stats.hitInterval));
+  if (stats.radius) values.push(t('半径 {0}', stats.radius));
+  if (stats.count) values.push(t('弹数 {0}', stats.count));
+  if (stats.pierces) values.push(t('穿透'));
+  if (stats.targets) values.push(t('最多 {0} 个目标', stats.targets), t('起手 {0} / 跳跃 {1}', stats.reach, stats.jump));
+  if (stats.paths) values.push(stats.paths.map(([radius, count]) => t('{0} 刃 / 轨道半径 {1}', count, radius)).join(' + '),
+    t('刃半径 {0}', stats.bladeRadius));
   return values.join(' · ');
 }
 
@@ -435,52 +464,52 @@ function pauseDetails() {
     ['角色', player.character.name],
     ['等级 / 经验', 'Lv.' + player.level + ' · ' + player.xp + ' / ' + xpRequired()],
     ['生命', Math.ceil(player.hp) + ' / ' + player.maxHp],
-    ['防御', player.defense + ' · 减伤 ' + statNumber(damageReduction() * 100) + '%'],
+    ['防御', player.defense + ' · ' + t('减伤 {0}%', statNumber(damageReduction() * 100))],
     ['全武器伤害加成', '+' + Math.round((attackMultiplier() - 1) * 100) + '%'],
-    ['移速', statNumber(player.speed) + ' 单位/秒'],
-    ['拾取范围', statNumber(player.magnet) + ' 单位'],
+    ['移速', t('{0} 单位/秒', statNumber(player.speed))],
+    ['拾取范围', t('{0} 单位', statNumber(player.magnet))],
     ['芯片', chips],
   ]) {
     const row = document.createElement('div');
     const labelNode = document.createElement('dt');
     const valueNode = document.createElement('dd');
-    labelNode.textContent = label;
+    labelNode.textContent = t(label);
     valueNode.textContent = value;
     row.append(labelNode, valueNode);
     stats.append(row);
   }
   const loadoutSection = document.createElement('h3');
-  loadoutSection.textContent = '当前装备';
+  loadoutSection.textContent = t('当前装备');
   const list = document.createElement('ul');
   list.className = 'equipment';
   const loadout = [{ id: player.character.icon, name: player.character.weapon }, ...weapons.filter(weapon => player.ranks[weapon.id])];
   for (const weapon of loadout) {
     const rank = player.ranks[weapon.id];
-    const name = !rank ? weapon.name + ' · 主武器'
-      : rank > maxWeaponRank ? weapon.evolution + ' · 已进化' : weapon.name + ' Lv.' + rank;
+    const name = !rank ? t(weapon.name) + ' · ' + t('主武器')
+      : rank > maxWeaponRank ? t(weapon.evolution) + ' · ' + t('已进化') : t(weapon.name) + ' Lv.' + rank;
     list.append(equipmentRow(weapon.id, name, weaponReadout(weapon.id, rank)));
   }
   const signatureHeading = document.createElement('h3');
-  signatureHeading.textContent = '角色专属';
+  signatureHeading.textContent = t('角色专属');
   const signatureList = document.createElement('ul');
   signatureList.className = 'equipment';
   const signature = player.character.signature;
   const wardStatus = player.signatureEquipped && player.character === characters.chatgpt
-    ? ' · ' + (player.ward > 0 ? '护盾 ' + Math.ceil(player.ward) + '/' + wardCapacity() : '还需移动 ' + statNumber(wardRecharge() - player.wardCharge) + ' 秒')
+    ? ' · ' + (player.ward > 0 ? t('护盾 {0}/{1}', Math.ceil(player.ward), wardCapacity()) : t('还需移动 {0} 秒', statNumber(wardRecharge() - player.wardCharge)))
     : '';
   const skill = player.character.skill;
-  signatureList.append(equipmentRow(skill.icon, skill.name + ' · 主动技能', skill.description));
-  signatureList.append(equipmentRow(signature.icon, signature.name + (player.signatureEquipped ? ' Lv.' + signatureRank() : ' · 未装') + wardStatus, moduleEffect(signature, Math.max(1, signatureRank()))));
+  signatureList.append(equipmentRow(skill.icon, t(skill.name) + ' · ' + t('主动技能'), skillDescription(skill)));
+  signatureList.append(equipmentRow(signature.icon, t(signature.name) + (player.signatureEquipped ? ' Lv.' + signatureRank() : ' · ' + t('未装')) + wardStatus, moduleEffect(signature, Math.max(1, signatureRank()))));
   const details = [stats, ...damageDetails(), signatureHeading, signatureList, loadoutSection, list];
   const moduleList = document.createElement('ul');
   moduleList.className = 'equipment';
   for (const item of upgrades) {
     const count = moduleRank(item);
-    if (count) moduleList.append(equipmentRow(item.icon, item.name + ' Lv.' + count, moduleEffect(item, count)));
+    if (count) moduleList.append(equipmentRow(item.icon, t(item.name) + ' Lv.' + count, moduleEffect(item, count)));
   }
   if (moduleList.childElementCount) {
     const heading = document.createElement('h3');
-    heading.textContent = '已装模块';
+    heading.textContent = t('已装模块');
     details.push(heading, moduleList);
   }
   return details;
@@ -488,20 +517,20 @@ function pauseDetails() {
 
 function damageDetails() {
   const rows = [
-    ['skill', player.character.skill.name + ' · 主动技能'],
-    ['main', player.character.weapon + ' · 主武器'],
+    ['skill', t(player.character.skill.name) + ' · ' + t('主动技能')],
+    ['main', t(player.character.weapon) + ' · ' + t('主武器')],
   ];
   for (const weapon of weapons) {
     if (!player.ranks[weapon.id]) continue;
     const name = player.ranks[weapon.id] > maxWeaponRank ? weapon.evolution : weapon.name;
-    rows.push([weapon.id, name + ' · 副武器']);
+    rows.push([weapon.id, t(name) + ' · ' + t('副武器')]);
   }
   if (player.signatureEquipped && player.character !== characters.chatgpt) {
-    rows.push(['signature', player.character.signature.name + ' · 专属模块']);
+    rows.push(['signature', t(player.character.signature.name) + ' · ' + t('专属模块')]);
   }
   const title = document.createElement('h3');
   const total = rows.reduce((sum, [id]) => sum + (player.damage[id] ?? 0), 0);
-  title.textContent = '本局伤害 · ' + Math.round(total).toLocaleString('zh-CN');
+  title.textContent = t('本局伤害') + ' · ' + Math.round(total).toLocaleString(gameLanguage);
   const list = document.createElement('ul');
   list.className = 'damage-report';
   for (const [id, label] of rows) {
@@ -512,7 +541,7 @@ function damageDetails() {
     const bar = document.createElement('div');
     const fill = document.createElement('i');
     heading.textContent = label;
-    number.textContent = Math.round(amount).toLocaleString('zh-CN');
+    number.textContent = Math.round(amount).toLocaleString(gameLanguage);
     fill.style.width = total > 0 ? 100 * amount / total + '%' : '0%';
     bar.append(fill);
     item.append(heading, number, bar);
@@ -541,10 +570,10 @@ function buildOffer(item) {
   const cost = item.id ? (evolving ? evolutionPrice : 16 + (nextRank - 1) * 6)
     : item.price + (nextRank - 1) * (item === player.character.signature ? 8 : 5);
   const moduleUpgrade = !item.id && rank > 0 && !bought;
-  const name = evolving ? item.evolution : item.name + (moduleUpgrade ? ' Lv.' + rank + ' → Lv.' : ' Lv.') + nextRank;
-  const details = evolving ? '满级进化 · ' + item.evolvedDescription
-    : item.id ? item.description : (item === player.character.signature ? '角色专属 · ' : '') + moduleEffect(item, nextRank);
-  return shopCard(name, bought ? '已安装' : '◇ ' + cost, details, bought || chips < cost, () => {
+  const name = evolving ? t(item.evolution) : t(item.name) + (moduleUpgrade ? ' Lv.' + rank + ' → Lv.' : ' Lv.') + nextRank;
+  const details = evolving ? t('满级进化') + ' · ' + t(item.evolvedDescription)
+    : item.id ? t(item.description) : (item === player.character.signature ? t('角色专属') + ' · ' : '') + moduleEffect(item, nextRank);
+  return shopCard(name, bought ? t('已安装') : '◇ ' + cost, details, bought || chips < cost, () => {
     if (mode !== modes.shop || !offers.includes(item) || player.boughtHere.has(item) || chips < cost) return;
     chips -= cost;
     player.boughtHere.add(item);
@@ -566,16 +595,16 @@ function evolutionPicker(items) {
   slot.className = 'evolution-picker';
   const ready = items.filter(item => !player.boughtHere.has(item));
   if (!ready.length) {
-    slot.textContent = '进化已购买';
+    slot.textContent = t('进化已购买');
     return slot;
   }
   const select = document.createElement('select');
-  select.setAttribute('aria-label', '选择进化武器');
+  select.setAttribute('aria-label', t('选择进化武器'));
   const offer = document.createElement('div');
   for (const [index, item] of ready.entries()) {
     const option = document.createElement('option');
     option.value = String(index);
-    option.textContent = item.evolution;
+    option.textContent = t(item.evolution);
     select.append(option);
   }
   const refresh = () => offer.replaceChildren(buildOffer(ready[Number(select.value) || 0]));
@@ -589,12 +618,12 @@ function shopSection(title, cards, count) {
   const section = document.createElement('section');
   section.className = 'shop-section';
   const heading = document.createElement('h3');
-  heading.textContent = title + ' · ' + count + ' 个货位';
+  heading.textContent = t(title) + ' · ' + t('{0} 个货位', count);
   section.append(heading, ...cards);
   for (let i = cards.length; i < count; i++) {
     const empty = document.createElement('span');
     empty.className = 'empty-slot';
-    empty.textContent = '本次无商品';
+    empty.textContent = t('本次无商品');
     section.append(empty);
   }
   return section;
@@ -609,10 +638,12 @@ function drawShop() {
     shopSection('模块', offers.filter(item => !item.id).map(buildOffer), 3)];
   const nextBoss = (wave + 2) % 5 === 0 ? stage.bosses[Math.floor((wave + 1) / 5)]?.[0] : null;
   const cost = 8 + rerolls * 4;
-  setPanel('波间补给', (boss?.hp <= 0 ? boss.profile.name + '已击败。' : '') + '可用芯片 ' + chips + '。场上剩余 ' + enemies.length + ' 个敌人。' +
-    (nextBoss ? '下一波首领 · ' + nextBoss : wave === 1 ? '下一波开始会遇到远程炮台。' : ''), [
-    ['进入第 ' + (wave + 2) + ' 波', () => { if (mode === modes.shop) startWave(wave + 1); }],
-    ['刷新 · ◇ ' + cost, () => {
+  const messages = [boss?.hp <= 0 && t('{0}已击败。', t(boss.profile.name)),
+    t('可用芯片 {0}。场上剩余 {1} 个敌人。', chips, enemies.length),
+    nextBoss ? t('下一波首领') + ' · ' + t(nextBoss) : wave === 1 && t('下一波开始会遇到远程炮台。')];
+  setPanel(t('波间补给'), messages.filter(Boolean).join(' '), [
+    [t('进入第 {0} 波', wave + 2), () => { if (mode === modes.shop) startWave(wave + 1); }],
+    [t('刷新') + ' · ◇ ' + cost, () => {
       if (mode !== modes.shop || chips < cost) return;
       chips -= cost;
       rerolls++;
@@ -625,15 +656,15 @@ function drawShop() {
 
 function finish(won, reason = '') {
   enterMode(modes.end);
-  const actions = [['再来一局', startRun], ['返回首页', home]];
+  const actions = [[t('再来一局'), startRun], [t('返回首页'), home]];
   if (won && stageIndex + 1 < stages.length) {
-    actions.unshift(['下一关 · ' + stages[stageIndex + 1].name, () => {
+    actions.unshift([t('下一关') + ' · ' + t(stages[stageIndex + 1].name), () => {
       selectStage(stageIndex + 1);
       startRun();
     }]);
   }
   if (showTestTools && !won && player.hp <= 0 && !reason) {
-    actions.unshift(['测试复活', () => {
+    actions.unshift([t('测试复活'), () => {
       if (mode !== modes.end || player.hp > 0) return;
       player.hp = player.maxHp;
       player.invulnerable = 2;
@@ -641,17 +672,18 @@ function finish(won, reason = '') {
       syncHud();
     }]);
   }
-  setPanel(won ? stage.name + ' · 已通关' : '防卫中断',
-    reason + '抵达第 ' + (wave + 1) + ' 波 · Lv.' + player.level + ' · 击倒 ' + kills + ' 个敌人。' +
-    (Object.keys(player.moduleRanks).length ? ' 已装模块 · ' + Object.entries(player.moduleRanks).map(([name, rank]) => name + ' Lv.' + rank).join('、') + '。' : ''),
+  const modules = Object.entries(player.moduleRanks).map(([name, rank]) => t(name) + ' Lv.' + rank);
+  const summary = [reason, t('抵达第 {0} 波 · Lv.{1} · 击倒 {2} 个敌人。', wave + 1, player.level, kills),
+    modules.length && t('已装模块') + ' · ' + modules.join(gameLanguage === 'en' ? ', ' : '、')];
+  setPanel(won ? t(stage.name) + ' · ' + t('已通关') : t('防卫中断'), summary.filter(Boolean).join(' '),
     actions, [], damageDetails());
 }
 
 function syncHud() {
   const seconds = Math.max(0, Math.ceil(remaining ?? 0));
   const clock = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
-  updateText('time', remaining === null ? '不限时' : clock);
-  updateText('wave-label', '第 ' + (wave + 1) + ' / ' + stage.waves.length + ' 波');
+  updateText('time', remaining === null ? t('不限时') : clock);
+  updateText('wave-label', t('第 {0} / {1} 波', wave + 1, stage.waves.length));
   updateText('chips', '◇ ' + chips);
   updateText('hud-character', player.character.name);
   updateText('hud-level', 'Lv.' + player.level + ' · ' + player.xp + '/' + xpRequired() + ' XP');
@@ -659,13 +691,13 @@ function syncHud() {
   el('health-fill').style.width = 100 * player.hp / player.maxHp + '%';
   el('xp-fill').style.width = 100 * player.xp / xpRequired() + '%';
   const skill = player.character.skill;
-  updateText('skill-name', skill.name);
-  updateText('skill-status', player.skillCooldown > 0 ? '冷却 ' + Math.ceil(player.skillCooldown) + ' 秒'
-    : coarsePointer.matches ? '可释放' : '可释放 · Q');
+  updateText('skill-name', t(skill.name));
+  updateText('skill-status', player.skillCooldown > 0 ? t('冷却 {0} 秒', Math.ceil(player.skillCooldown))
+    : t('可释放') + (coarsePointer.matches ? '' : ' · Q'));
   el('skill-use').disabled = mode !== modes.play || player.skillCooldown > 0;
   el('boss-hud').hidden = !boss || boss.hp <= 0;
   if (boss) {
-    updateText('boss-name', boss.profile.name + ' · 阶段 ' + (boss.phaseIndex + 1) + ' / ' + boss.profile.floors.length);
+    updateText('boss-name', t(boss.profile.name) + ' · ' + t('阶段 {0}', boss.phaseIndex + 1) + ' / ' + boss.profile.floors.length);
     for (const [index, bar] of boss.bars.entries()) {
       const { current, max } = phaseHealth(boss, index);
       bar.fill.style.width = 100 * current / max + '%';
@@ -688,7 +720,7 @@ function refreshBossBars(enemy) {
   enemy.bars = enemy.profile.floors.map((_, index) => {
     const container = document.createElement('div');
     container.className = 'phase-health';
-    container.setAttribute('aria-label', '阶段 ' + (index + 1));
+    container.setAttribute('aria-label', t('阶段 {0}', index + 1));
     const fill = document.createElement('i');
     container.append(fill);
     return { container, fill };
@@ -710,7 +742,7 @@ function spawn() {
     type: shooter ? 'sentry' : elite ? 'elite' : flank ? 'flank' : 'drone', r: shooter ? 16 : elite ? 19 : flank ? 10 : 13,
     x: edge === 0 ? 17 : edge === 1 ? width - 17 : random(20, width - 20),
     y: edge === 2 ? 105 : edge === 3 ? height - 17 : random(105, height - 18),
-    hp: (shooter ? 49 : elite ? 95 : flank ? 23 : 36) + wave * (elite ? 13 : 6) + stageIndex * 10,
+    hp: ((shooter ? 49 : elite ? 95 : flank ? 23 : 36) + wave * (elite ? 13 : 6) + stageIndex * 10) * healthTier(wave),
     speed: (shooter ? 76 : elite ? 78 : flank ? random(140, 158) : random(83, 108)) + Math.min(wave * 5, 56),
     attack: random(1.5, 3), windup: 0,
     grace: .45, phase: random(0, Math.PI * 2),
@@ -975,7 +1007,7 @@ function activateSkill() {
   player.cutInTop = (hudBottom - bounds.top + 17) * height / bounds.height;
   player.skillDuration = .18 + (skill.hits.length - 1) * skill.interval + .40;
   player.skillPose = player.skillDuration;
-  player.skillCooldown = skill.cooldown;
+  player.skillCooldown = ultimateCooldown;
   syncHud();
 }
 
@@ -995,7 +1027,7 @@ function stepSkill(dt) {
     center = { x: cast.center.x + Math.cos(cast.angle) * offset, y: cast.center.y + Math.sin(cast.angle) * offset };
   }
   if (id === 'gemini') {
-    const target = nearestForSkill(330, cast.used) ?? nearestForSkill(330);
+    const target = nearestForSkill(400, cast.used) ?? nearestForSkill(400);
     if (target) { center = target; cast.used.add(target); }
   }
   if (id === 'grok') {
@@ -1156,7 +1188,7 @@ function summonWisps(enemy, count) {
     enemies.push({
       type: 'wisp', x: clamp(enemy.x + 80 * Math.cos(angle), 20, width - 20),
       y: clamp(enemy.y + 80 * Math.sin(angle), 105, height - 20),
-      r: 12, hp: 92, speed: 145, grace: .65,
+      r: 12, hp: 92 * healthTier(wave), speed: 145, grace: .65,
     });
   }
 }
@@ -1167,7 +1199,7 @@ function startBossPhase(enemy, phaseIndex) {
   enemy.transition = 1.05;
   enemy.attack = 0;
   banner = 2.3;
-  updateText('wave-message', phaseIndex === 2 ? '第三阶段 · 暴走' : '第二阶段 · 强化冲击');
+  updateText('wave-message', t(phaseIndex === 2 ? '第三阶段 · 暴走' : '第二阶段 · 强化冲击'));
   if (enemy.profile.final || stageIndex > 0) summonWisps(enemy, phaseIndex === 2 ? 3 : 2);
   spark(enemy.x, enemy.y, '#ff9edd', 26);
 }
@@ -1411,7 +1443,7 @@ function step(dt) {
     else openShop();
   }
   else if (remaining !== null && remaining <= 0) {
-    if (boss?.hp > 0) finish(false, '倒计时结束，' + boss.profile.name + '仍未击败。');
+    if (boss?.hp > 0) finish(false, t('倒计时结束，{0}仍未击败。', t(boss.profile.name)));
     else openShop();
   }
 }
@@ -1648,7 +1680,7 @@ function drawSkillCutIn() {
   ctx.strokeStyle = player.character.color; ctx.beginPath(); ctx.moveTo(2,h); ctx.lineTo(w-12,h-5); ctx.stroke();
   sprite('cast-' + player.character.id, 30, h / 2 - 3, 69);
   ctx.fillStyle = player.character.color; ctx.font = 'bold 10px system-ui'; ctx.fillText(player.character.name, 62, 21);
-  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 17px system-ui'; ctx.fillText(player.character.skill.name, 61, 42, w - 74);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 17px system-ui'; ctx.fillText(t(player.character.skill.name), 61, 42, w - 74);
   ctx.restore();
 }
 
@@ -1770,7 +1802,17 @@ portraitStage.addEventListener('pointerleave', () => {
   portraitStage.style.removeProperty('--look-x');
   portraitStage.style.removeProperty('--look-y');
 });
-selectCharacter(selectedCharacter);
+setGameLanguage(gameLanguage);
+el('language-select').addEventListener('change', event => {
+  const language = event.target.value;
+  if (!gameLanguages.includes(language)) return;
+  setGameLanguage(language);
+  try {
+    localStorage.setItem('moegpt-survivors-language', language);
+  } catch {
+    // Language switching still works for this session.
+  }
+});
 el('start').addEventListener('click', startRun);
 el('skill-use').addEventListener('click', activateSkill);
 for (const button of el('character-select').querySelectorAll('button')) {

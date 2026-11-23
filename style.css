@@ -19,11 +19,14 @@ button:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
   overflow: hidden;
 }
 .brand { display: flex; align-items: center; gap: 13px; font-size: 14px; font-weight: 800; letter-spacing: .16em; }
+.brand select { margin-left: auto; min-height: 42px; padding: 4px 7px; color: inherit; background: #251936; border: 1px solid #8165aa; border-radius: 9px; font: 650 13px system-ui; }
 .mark { font-size: 23px; color: var(--accent); }
 .brand-divider { width: 1px; height: 14px; background: #85719f; }
 .hero { width: min(1140px, 100%); margin: auto; display: grid; grid-template-columns: 1fr 1.15fr; align-items: center; min-width: 0; }
 .intro { grid-column: 1; grid-row: 1; z-index: 1; padding: 28px 0; }
 h1 { margin: 12px 0 15px; font-size: clamp(48px, 7.25vw, 102px); letter-spacing: -.07em; line-height: 1.04; font-weight: 950; }
+:lang(en) h1 { font-size: clamp(40px, 6.2vw, 86px); letter-spacing: -.055em; }
+:lang(ja) h1 { font-family: system-ui, "Yu Gothic", sans-serif; font-size: clamp(40px, 5.8vw, 78px); }
 .character-select { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 18px; }
 .character-select button { min-height: 44px; padding: 8px 15px; border: 1px solid #8165aa; border-radius: 9px; background: #2a1d42; font-weight: 750; }
 .character-select button[aria-pressed="true"] { background: #d2b7ff; color: #211331; }
@@ -71,7 +74,6 @@ h1 { margin: 12px 0 15px; font-size: clamp(48px, 7.25vw, 102px); letter-spacing:
 .intro .primary { width: min(100%, 264px); }
 .secondary { background: #37284c; border-color: #695389; }
 .controls-note, footer { color: var(--muted); font-size: 13px; }
-footer span { margin: 0 4px; }
 .battle { position: fixed; inset: 0; background: #080714; overflow: hidden; overscroll-behavior: none; }
 canvas, .move-zone { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
 .move-zone { top: 43%; height: 57%; z-index: 1; }
@@ -174,7 +176,8 @@ canvas, .move-zone { position: absolute; inset: 0; width: 100%; height: 100%; to
   .orbit-inner { width: min(62%, 235px); }
   .intro { padding: 12px 0; }
   h1 { font-size: clamp(32px, 9vw, 60px); margin: 6px 0 8px; letter-spacing: -.05em; }
-  .desktop-break { display: none; }
+  :lang(en) h1, :lang(ja) h1 { font-size: clamp(29px, 8.2vw, 46px); }
+  .brand { gap: 8px; font-size: 12px; letter-spacing: .06em; }
   .character-select { margin: 2px 0 9px; gap: 4px; }
   .character-select button { flex: 1 0 auto; padding: 7px 5px; font-size: 13px; }
   .weapon { margin-bottom: 12px; }
