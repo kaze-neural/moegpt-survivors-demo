@@ -1061,7 +1061,8 @@ function damageEnemy(enemy, damage, source = 'main', returningPage = false, crit
   if (inkBurst) {
     enemy.inkMark = 0;
     const extra = signatureRank() - 1;
-    const bonus = damage * (.70 + extra * .15) + 48 + extra * 16;
+    const flatBonus = (48 + extra * 16) * (critStats().damageBonus ?? 1);
+    const bonus = damage * (.70 + extra * .15) + flatBonus;
     applyDamage(enemy, bonus, 'signature');
     spark(enemy.x, enemy.y, '#ffbb62', 12);
     for (const near of enemies) {
