@@ -47,8 +47,7 @@ const ultimateEchoInterval = .5;
 const ultimateEchoDamage = .65;
 const batteryHeal = .20;
 const bossBatteryHeal = .50;
-const eliteChipLoot = 3;
-const bossChipLoot = 10;
+const bossChipLoot = 5;
 const precisionName = '精准棱芯';
 const precisionTiers = [
   { chance: 8, multiplier: 2 },
@@ -1499,7 +1498,9 @@ function stepShots(dt) {
     } else {
       const elite = enemy.type === 'elite';
       if (elite || Math.random() < chipRates[Math.min(wave, chipRates.length - 1)]) {
-        drops.push({ x: enemy.x, y: enemy.y, value: elite ? eliteChipLoot : 1 });
+        // Each elite bonus rolls independently.
+        const value = elite ? 1 + Number(Math.random() < .50) + Number(Math.random() < .10) : 1;
+        drops.push({ x: enemy.x, y: enemy.y, value });
       }
       if (Math.random() < (elite ? .05 : .01)) drops.push({ x: enemy.x + 5, y: enemy.y, heal: batteryHeal });
     }
