@@ -1,49 +1,56 @@
-# 星火回路 · Starfire Circuit
+# MoeGPT · Starfire Circuit
 
-《星火回路》是一个单人俯视角生存动作游戏原型。选择一位 AI 娘，在一波波敌人中走位、施放技能，收集芯片升级武器和模块。网页支持电脑键盘和手机触控。
+**[Play Starfire Circuit in your browser](https://kaze-neural.github.io/moegpt-survivors-demo/)**
 
-## 本地运行
+Starfire Circuit is a single-player, top-down survival game prototype featuring the five heroines from MoeGPT AI Girls. Dodge enemy waves, collect chips, and spend them between waves to upgrade your weapons and modules. The game runs on desktop and mobile with plain HTML, CSS, and JavaScript.
 
-下载或克隆仓库后，用桌面浏览器打开本地的 `index.html`。也可以在仓库根目录运行下面的命令，启动 Python 3 的静态服务器。
+## Local Setup
+
+Clone or download the repository and open `index.html` in a desktop browser. To serve the game locally, run this command from the repository root and open [localhost:8765](http://localhost:8765/).
 
 ```sh
 python -m http.server 8765 --bind 127.0.0.1
 ```
 
-然后打开 [localhost:8765](http://localhost:8765/)。同一 Wi-Fi 下用手机测试时，将启动命令的绑定地址改为 `0.0.0.0`，再用手机浏览器打开电脑的局域网 IP 和端口 `8765`。
+For mobile testing on the same Wi-Fi network, change the bind address to `0.0.0.0` and open your computer’s local IP address on port `8765` from your phone.
 
-| 操作 | 电脑 | 手机 |
+## Controls
+
+| Action | Desktop | Mobile |
 | --- | --- | --- |
-| 移动 | WASD 或方向键 | 在屏幕下半部拖动 |
-| 主动技能 | Q | 点击左下角技能按钮 |
-| 暂停 | Esc | 点击右上角暂停按钮 |
+| Move | WASD or arrow keys | Drag on the lower half of the screen |
+| Use ultimate | Q | Tap the skill button in the lower left |
+| Pause | Esc | Tap the pause button in the upper right |
 
-首页可切换英文、简体中文和日文。首次打开默认英文。
+The title screen lets you switch between English, Simplified Chinese, and Japanese. English is the default.
 
-## 角色与关卡
+## Features and Status
 
-| 角色 | 主武器 | 主动技能 |
+| Character | Primary weapon | Ultimate |
 | --- | --- | --- |
-| ChatGPT | 三段龙息 | 银龙回响 |
-| Claude | 回卷书页 | 终章书域 |
-| DeepSeek | 声呐水珠 | 鲸落潮汐 |
-| Gemini | 双子飞星 | 双星连图 |
-| Grok | 弦月战斧 | 黑金断月 |
+| ChatGPT | Triple Dragon Breath | Silver Dragon Echo |
+| Claude | Returning Pages | Final Chapter |
+| DeepSeek | Sonar Orb | Whalecrest Tide |
+| Gemini | Twin Stars | Twin Constellation |
+| Grok | Crescent Axe | Mooncleaver |
 
-- 故障中继站、碎光回廊、天穹裂隙分别有 **10、15、20 波**，每五波遇到一位首领。
-- 开局可免费选择一件副武器和一个模块。随后可在波间商店购买、升级和进化武器，五位角色各有专属模块。
-- 普通电池恢复 **20%** 最大生命，首领电池恢复 **50%**。暂停页和结算页可以查看各武器及技能的实际伤害。
+- Broken Relay, Shattered Gallery, and Astral Rift have 10, 15, and 20 waves, with a boss every five waves.
+- Start each run with one free secondary weapon and one free module. Buy upgrades and evolve max-rank secondary weapons at shops between waves.
+- Each character has a signature module. Regular batteries restore 20% of max HP, and boss batteries restore 50%.
+- The pause and results screens show actual damage by weapon and skill. The demo includes test speeds and a test revive.
 
-## 项目结构
+## Project Layout
 
-| 路径 | 内容 |
-| --- | --- |
-| [index.html](index.html) | 首页、战斗 HUD 和商店界面 |
-| [style.css](style.css) | 电脑和手机布局 |
-| [game.js](game.js) | Canvas 渲染、战斗、掉落、商店和输入处理 |
-| [i18n.js](i18n.js) | 界面翻译与语言偏好 |
-| [art/](art/) | 立绘、战斗动画、场景、敌人和道具贴图 |
+```text
+index.html  Title screen, combat HUD, and shops
+style.css   Desktop and mobile layouts
+game.js     Canvas rendering, combat, loot, shops, and input
+i18n.js     Interface translations and language preference
+art/        Portraits, animations, arenas, enemies, and pickups
+```
 
-项目使用原生 HTML、CSS 和 JavaScript，无需安装前端依赖或执行构建。将 `game.js` 中的 `showTestTools` 设为 `false` 可关闭测试倍速和复活。
+## Deployment
 
-这是非官方同人原型。
+The live demo is served by GitHub Pages from the root of `main`. Run it directly from the repository files. Set `showTestTools` to `false` in `game.js` to disable test speeds and the test revive.
+
+This is an unofficial fan project.
